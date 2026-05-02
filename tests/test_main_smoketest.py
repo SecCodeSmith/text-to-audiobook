@@ -14,69 +14,85 @@
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+
 import torch
 
+
 def test_main_import_no_error():
-    if 'main' in sys.modules:
-        del sys.modules['main']
+    if "main" in sys.modules:
+        del sys.modules["main"]
 
     try:
         import main
-        assert hasattr(main, '__name__')
+
+        assert hasattr(main, "__name__")
     except ImportError as e:
         raise AssertionError(f"Failed to import main: {e}")
+
 
 def test_gui_launch_no_error(monkeypatch):
     mock_ctk = MagicMock()
     mock_ctk.CTk = MagicMock()
-    monkeypatch.setitem(sys.modules, 'customtkinter', mock_ctk)
+    monkeypatch.setitem(sys.modules, "customtkinter", mock_ctk)
 
     from src.gui import launch
-    try:
-        pass
-    except Exception as e:
-        raise AssertionError(f"GUI launch failed: {e}")
+
+    assert callable(launch), "launch must be a callable function"
+
 
 def test_tts_engine_instantiation():
     """Test TTSEngine can be instantiated without errors."""
     from src.tts_engine import TTSEngine
+
     engine = TTSEngine()
     assert engine is not None
     assert engine.model_name is not None
     assert engine.engine is None  # Not loaded until load() is called
 
+
 def test_torch_compile_available():
     """Test torch.compile is available (PyTorch 2.0+)."""
-    assert hasattr(torch, 'compile'), "torch.compile requires PyTorch 2.0+"
+    assert hasattr(torch, "compile"), "torch.compile requires PyTorch 2.0+"
+
 
 def test_tts_engine_load_method_has_compile():
     """Test that load() method has torch.compile integration."""
-    from src.tts_engine import TTSEngine
     import inspect
 
+    from src.tts_engine import TTSEngine
+
     source = inspect.getsource(TTSEngine.load)
-    assert 'torch.compile' in source, "torch.compile not found in load() method"
-    assert 'reduce-overhead' in source, "compile mode not specified correctly"
+    assert "torch.compile" in source, "torch.compile not found in load() method"
+    assert "reduce-overhead" in source, "compile mode not specified correctly"
+
 
 def test_tts_engine_voice_ref_has_compile():
     """Test that _generate_voice_reference() has torch.compile integration."""
-    from src.tts_engine import TTSEngine
     import inspect
 
+    from src.tts_engine import TTSEngine
+
     source = inspect.getsource(TTSEngine._generate_voice_reference)
-    assert 'torch.compile' in source, "torch.compile not found in _generate_voice_reference() method"
-    assert 'reduce-overhead' in source, "compile mode not specified correctly"
+    assert (
+        "torch.compile" in source
+    ), "torch.compile not found in _generate_voice_reference() method"
+    assert "reduce-overhead" in source, "compile mode not specified correctly"
+
 
 def test_tts_engine_compile_error_handling():
     """Test that compile errors are caught gracefully."""
-    from src.tts_engine import TTSEngine
     import inspect
+
+    from src.tts_engine import TTSEngine
 
     # Check that both methods have try/except for torch.compile
     load_source = inspect.getsource(TTSEngine.load)
     ref_source = inspect.getsource(TTSEngine._generate_voice_reference)
 
-    assert 'except Exception' in load_source, "load() missing error handling for compile"
-    assert 'except Exception' in ref_source, "_generate_voice_reference() missing error handling for compile"
-
+    assert (
+        "except Exception" in load_source
+    ), "load() missing error handling for compile"
+    assert (
+        "except Exception" in ref_source
+    ), "_generate_voice_reference() missing error handling for compile"

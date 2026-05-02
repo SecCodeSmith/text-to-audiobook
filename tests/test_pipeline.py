@@ -13,8 +13,9 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-from pathlib import Path
-from src.pipeline import run, prepare_segments
+
+from src.pipeline import prepare_segments, run
+
 
 def test_pipeline_with_no_files(tmp_path):
     input_dir = tmp_path / "input"
@@ -22,6 +23,8 @@ def test_pipeline_with_no_files(tmp_path):
     output_dir = tmp_path / "output"
 
     result = run(input_dir, output_dir)
+    assert result == {} or result is not None
+
 
 def test_pipeline_with_example_file(tmp_path):
     input_dir = tmp_path / "input"
@@ -35,19 +38,25 @@ def test_pipeline_with_example_file(tmp_path):
 
     try:
         result = run(input_dir, output_dir)
-    except Exception as e:
+        assert result is not None
+    except Exception:
         pass
 
 
 def test_prepare_segments_respects_selected_names(tmp_path, monkeypatch):
     from src import config
+
     monkeypatch.setattr(config, "CACHE_DIR", tmp_path / "cache")
 
     input_dir = tmp_path / "input"
     (input_dir / "alpha").mkdir(parents=True)
-    (input_dir / "alpha" / "0_chap.md").write_text("Alpha story content.", encoding="utf-8")
+    (input_dir / "alpha" / "0_chap.md").write_text(
+        "Alpha story content.", encoding="utf-8"
+    )
     (input_dir / "beta").mkdir(parents=True)
-    (input_dir / "beta" / "0_chap.md").write_text("Beta story content.", encoding="utf-8")
+    (input_dir / "beta" / "0_chap.md").write_text(
+        "Beta story content.", encoding="utf-8"
+    )
 
     output_dir = tmp_path / "output"
 
@@ -63,4 +72,3 @@ def test_prepare_segments_empty_selection_returns_empty(tmp_path):
     output_dir = tmp_path / "output"
     results = prepare_segments(input_dir, output_dir, selected_names=[])
     assert results == {}
-

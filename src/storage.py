@@ -14,9 +14,9 @@
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 """Abstract storage backend for chunk metadata and segment persistence."""
+
 from abc import ABC, abstractmethod
-from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 
 class StorageBackend(ABC):
@@ -104,4 +104,3 @@ class StorageBackend(ABC):
     def init_schema(self) -> None:
         """Initialize storage schema (create tables, directories, etc.)."""
         pass
-

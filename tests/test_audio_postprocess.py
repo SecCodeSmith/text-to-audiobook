@@ -14,14 +14,17 @@
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 from pathlib import Path
+
 from src.audio_postprocess import denoise
+
 
 def test_denoise_with_missing_file():
     fake_path = Path("/nonexistent/file.wav")
     try:
         denoise(fake_path)
-    except Exception as e:
+    except Exception:
         assert True
+
 
 def test_denoise_with_real_file(tmp_path):
     wav_file = tmp_path / "test.wav"
@@ -30,4 +33,3 @@ def test_denoise_with_real_file(tmp_path):
         denoise(wav_file)
     except Exception:
         pass
-

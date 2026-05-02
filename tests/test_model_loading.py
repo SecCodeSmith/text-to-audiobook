@@ -21,8 +21,8 @@ through `qwen_tts.Qwen3TTSModel.from_pretrained` which registers the
 model class with AutoConfig/AutoModel/AutoProcessor before delegating
 to transformers. These tests pin that contract in place.
 """
+
 from unittest.mock import MagicMock, patch
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -36,7 +36,10 @@ def _fake_wrapper():
     wrapper.model = MagicMock(name="Qwen3TTSForConditionalGeneration")
     wrapper.processor = MagicMock(name="Qwen3TTSProcessor")
     wrapper.generate = MagicMock(
-        return_value=([np.zeros(config.SAMPLE_RATE * 1, dtype=np.float32)], config.SAMPLE_RATE)
+        return_value=(
+            [np.zeros(config.SAMPLE_RATE * 1, dtype=np.float32)],
+            config.SAMPLE_RATE,
+        )
     )
     return wrapper
 
@@ -106,8 +109,9 @@ def test_llm_load_instantiates_llama_with_configured_path():
         def __init__(self, **kwargs):
             captured.update(kwargs)
 
-    with patch("src.llm_normalizer.llama_cpp") as mock_llama_cpp, \
-         patch("src.llm_normalizer.hf_hub_download") as mock_dl:
+    with patch("src.llm_normalizer.llama_cpp") as mock_llama_cpp, patch(
+        "src.llm_normalizer.hf_hub_download"
+    ) as mock_dl:
         mock_llama_cpp.Llama = FakeLlama
         mock_dl.return_value = "/tmp/model.gguf"
         norm = LLMNormalizer(config.LLM_MODEL_PATH)
@@ -138,6 +142,7 @@ def test_tts_loads_real_qwen_model():
     """Skipped by default — run with `pytest -m live` to exercise a real model load."""
     import importlib
     import sys
+
     for mod in ("torch", "transformers", "qwen_tts"):
         sys.modules.pop(mod, None)
     qwen_tts = importlib.import_module("qwen_tts")
@@ -147,4 +152,3 @@ def test_tts_loads_real_qwen_model():
     )
     assert wrapper.model is not None
     assert wrapper.processor is not None
-

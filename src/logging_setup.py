@@ -15,6 +15,7 @@
 
 import logging
 from logging.handlers import RotatingFileHandler
+
 from . import config
 
 _gui_callback = None
@@ -69,4 +70,3 @@ def set_levels(console_level: str = "INFO", file_level: str = "DEBUG") -> None:
         _console_handler.setLevel(getattr(logging, console_level.upper(), logging.INFO))
     if _file_handler is not None:
         _file_handler.setLevel(getattr(logging, file_level.upper(), logging.DEBUG))
-

@@ -15,10 +15,12 @@
 
 from src.markdown_cleaner import clean
 
+
 def test_strip_headers():
     md = "# Title\nSome text"
     assert "Title" not in clean(md)
     assert "Some text" in clean(md)
+
 
 def test_strip_bold():
     md = "This is **bold** text"
@@ -26,11 +28,13 @@ def test_strip_bold():
     assert "bold" in result
     assert "**" not in result
 
+
 def test_strip_italic():
     md = "This is *italic* text"
     result = clean(md)
     assert "italic" in result
     assert "*" not in result
+
 
 def test_strip_links():
     md = "Check out [this link](https://example.com)"
@@ -38,11 +42,13 @@ def test_strip_links():
     assert "this link" in result
     assert "https://" not in result
 
+
 def test_preserve_paragraphs():
     md = "First paragraph.\n\nSecond paragraph."
     result = clean(md)
     assert "First paragraph" in result
     assert "Second paragraph" in result
+
 
 def test_strip_code_fence():
     md = "Text\n```python\ncode\n```\nMore text"
@@ -51,9 +57,9 @@ def test_strip_code_fence():
     assert "Text" in result
     assert "More text" in result
 
+
 def test_strip_inline_code():
     md = "Use `function()` in the code"
     result = clean(md)
     assert "function()" in result
     assert "`" not in result
-

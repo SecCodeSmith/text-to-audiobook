@@ -19,6 +19,7 @@ These catch broad classes of "the app crashes 5 minutes in" defects: a
 broken import in a glue module, a misuse of dict-vs-attribute access, a
 removed function reference, a contract change between stages.
 """
+
 import importlib
 from pathlib import Path
 
@@ -39,7 +40,9 @@ def test_run_pipeline_end_to_end(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline.config, "CACHE_DIR", tmp_path / "cache")
 
     input_root = tmp_path / "input"
-    _write_input_project(input_root, "book", "First chapter text. Hello.", "Second chapter. World.")
+    _write_input_project(
+        input_root, "book", "First chapter text. Hello.", "Second chapter. World."
+    )
 
     results = pipeline.run(str(input_root), str(tmp_path / "output"))
 
@@ -64,22 +67,45 @@ def test_pipeline_modules_are_importable():
 
 def test_tts_engine_public_api_present():
     from src.tts_engine import TTSEngine
+
     engine = TTSEngine()
-    for name in ("load", "unload", "synthesize_first", "synthesize_with_anchor", "process_all"):
-        assert callable(getattr(engine, name)), f"TTSEngine.{name} missing or not callable"
+    for name in (
+        "load",
+        "unload",
+        "synthesize_first",
+        "synthesize_with_anchor",
+        "process_all",
+    ):
+        assert callable(
+            getattr(engine, name)
+        ), f"TTSEngine.{name} missing or not callable"
 
 
 def test_llm_normalizer_public_api_present():
     from src.llm_normalizer import LLMNormalizer
+
     norm = LLMNormalizer("nonexistent.gguf")
-    for name in ("load", "unload", "normalize", "normalize_text", "analyze_emotions",
-                 "fill_context", "sort_files", "process_all"):
+    for name in (
+        "load",
+        "unload",
+        "normalize",
+        "normalize_text",
+        "analyze_emotions",
+        "fill_context",
+        "sort_files",
+        "process_all",
+    ):
         assert callable(getattr(norm, name)), f"LLMNormalizer.{name} missing"
 
 
 def test_pipeline_public_api_present():
-    for name in ("run", "prepare_segments", "generate_audio",
-                 "discover_projects", "load_cached_segments",
-                 "prepare_segments_for_project", "generate_audio_for_project"):
+    for name in (
+        "run",
+        "prepare_segments",
+        "generate_audio",
+        "discover_projects",
+        "load_cached_segments",
+        "prepare_segments_for_project",
+        "generate_audio_for_project",
+    ):
         assert callable(getattr(pipeline, name)), f"pipeline.{name} missing"
-

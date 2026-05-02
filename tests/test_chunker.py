@@ -13,7 +13,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-from src.chunker import split_to_chunks, Chunk
+from src.chunker import split_to_chunks
+
 
 def test_chunks_under_max_words():
     text = "First sentence. Second sentence. Third sentence."
@@ -22,19 +23,26 @@ def test_chunks_under_max_words():
         word_count = len(chunk.text.split())
         assert word_count < 11, f"Chunk exceeds max_words: {word_count}"
 
+
 def test_chunks_end_with_sentence_boundary():
     text = "This is sentence one. This is sentence two. This is sentence three."
     chunks = split_to_chunks(text)
     for chunk in chunks:
         text_stripped = chunk.text.rstrip()
-        last_char = text_stripped[-1] if text_stripped else ''
-        assert last_char in ['.', '!', '?'], f"Chunk doesn't end in sentence boundary: {text_stripped}"
+        last_char = text_stripped[-1] if text_stripped else ""
+        assert last_char in [
+            ".",
+            "!",
+            "?",
+        ], f"Chunk doesn't end in sentence boundary: {text_stripped}"
+
 
 def test_single_short_text():
     text = "Short text."
     chunks = split_to_chunks(text)
     assert len(chunks) >= 1
     assert chunks[0].text.strip() == "Short text."
+
 
 def test_paragraph_flag():
     text = "First paragraph.\n\nSecond paragraph."
@@ -43,13 +51,14 @@ def test_paragraph_flag():
     for chunk in chunks:
         assert isinstance(chunk.ends_paragraph, bool)
 
+
 def test_empty_text():
     text = ""
     chunks = split_to_chunks(text)
     assert len(chunks) == 0
 
+
 def test_very_long_sentence():
     long_sentence = "This is a very long sentence that contains many words " * 30 + "."
     chunks = split_to_chunks(long_sentence, max_words=50)
     assert len(chunks) > 0
-

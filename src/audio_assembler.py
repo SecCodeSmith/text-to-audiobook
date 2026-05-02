@@ -25,6 +25,7 @@ from . import config
 
 logger = logging.getLogger(__name__)
 
+
 def assemble(chunk_wavs: list[Path], chunk_meta: list, out_path: Path) -> Path:
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -45,10 +46,7 @@ def assemble(chunk_wavs: list[Path], chunk_meta: list, out_path: Path) -> Path:
             if combined is None:
                 combined = audio
             else:
-                combined = combined.append(
-                    audio,
-                    crossfade=config.CROSSFADE_MS
-                )
+                combined = combined.append(audio, crossfade=config.CROSSFADE_MS)
 
             if i < len(chunk_meta):
                 meta = chunk_meta[i]
@@ -65,12 +63,16 @@ def assemble(chunk_wavs: list[Path], chunk_meta: list, out_path: Path) -> Path:
                 silence = AudioSegment.silent(duration=silence_ms)
                 combined = combined.append(silence)
 
-        wav_out = out_path.with_suffix('.wav')
-        combined.export(str(wav_out), format='wav')
+        if combined is None:
+            logger.warning("No chunks to combine")
+            return out_path
+
+        wav_out = out_path.with_suffix(".wav")
+        combined.export(str(wav_out), format="wav")
         logger.info(f"Exported WAV: {wav_out}")
 
-        mp3_out = out_path.with_suffix('.mp3')
-        combined.export(str(mp3_out), format='mp3', bitrate='192k')
+        mp3_out = out_path.with_suffix(".mp3")
+        combined.export(str(mp3_out), format="mp3", bitrate="192k")
         logger.info(f"Exported MP3: {mp3_out}")
 
         return mp3_out
@@ -78,4 +80,3 @@ def assemble(chunk_wavs: list[Path], chunk_meta: list, out_path: Path) -> Path:
     except Exception as e:
         logger.error(f"Assembly failed: {e}")
         raise
-

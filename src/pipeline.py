@@ -20,13 +20,13 @@ from pathlib import Path
 
 from natsort import natsorted
 
-from .markdown_cleaner import clean
+from . import config
+from .audio_assembler import assemble
+from .audio_postprocess import denoise
 from .chunker import split_to_chunks
 from .llm_normalizer import LLMNormalizer
+from .markdown_cleaner import clean
 from .tts_engine import TTSEngine
-from .audio_postprocess import denoise
-from .audio_assembler import assemble
-from . import config
 
 logger = logging.getLogger(__name__)
 
@@ -37,14 +37,25 @@ def _emit(progress_cb, msg):
         progress_cb(msg)
 
 
-_NUMERIC_PREFIX_RE = re.compile(r'^\d')
+def _make_progress(progress_cb):
+    """Create a progress reporter bound to the given callback."""
+
+    def progress(msg):
+        _emit(progress_cb, msg)
+
+    return progress
+
+
+_NUMERIC_PREFIX_RE = re.compile(r"^\d")
 
 
 def _all_have_numeric_prefix(names: list) -> bool:
     return bool(names) and all(_NUMERIC_PREFIX_RE.match(n) for n in names)
 
 
-def _order_files(input_dir: Path, llm: LLMNormalizer, cache_dir: Path, progress_cb=None):
+def _order_files(
+    input_dir: Path, llm: LLMNormalizer, cache_dir: Path, progress_cb=None
+):
     """Determine narrative reading order for .md files.
 
     Strategy:
@@ -55,7 +66,7 @@ def _order_files(input_dir: Path, llm: LLMNormalizer, cache_dir: Path, progress_
 
     Result is cached at <cache_dir>/file_order.json.
     """
-    progress = lambda m: _emit(progress_cb, m)
+    progress = _make_progress(progress_cb)
 
     md_paths = list(input_dir.glob("**/*.md"))
     if not md_paths:
@@ -66,7 +77,9 @@ def _order_files(input_dir: Path, llm: LLMNormalizer, cache_dir: Path, progress_
     if cache_file.exists():
         try:
             cached = json.loads(cache_file.read_text(encoding="utf-8"))
-            order = [name_to_path[n] for n in cached.get("order", []) if n in name_to_path]
+            order = [
+                name_to_path[n] for n in cached.get("order", []) if n in name_to_path
+            ]
             extras = [p for p in md_paths if p not in order]
             if not extras and order:
                 progress(f"Using cached file order ({len(order)} files)")
@@ -82,7 +95,9 @@ def _order_files(input_dir: Path, llm: LLMNormalizer, cache_dir: Path, progress_
     if _all_have_numeric_prefix(names):
         # Numeric-prefixed filenames already encode order; natsort handles 1, 2, ..., 10, 11
         ordered_names = natsorted(names)
-        progress(f"Numeric-prefixed files: using natural sort ({len(ordered_names)} files)")
+        progress(
+            f"Numeric-prefixed files: using natural sort ({len(ordered_names)} files)"
+        )
     else:
         # Pre-sort with natsort so LLM sees a sensible baseline, then let it
         # reorder by narrative cues (ordinal words, prologue/epilogue keywords, content)
@@ -100,12 +115,15 @@ def _order_files(input_dir: Path, llm: LLMNormalizer, cache_dir: Path, progress_
         ordered_names = llm.sort_files(previews)
 
     cache_dir.mkdir(parents=True, exist_ok=True)
-    cache_file.write_text(json.dumps({"order": ordered_names}, ensure_ascii=False, indent=2), encoding="utf-8")
+    cache_file.write_text(
+        json.dumps({"order": ordered_names}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     return [name_to_path[n] for n in ordered_names if n in name_to_path]
 
 
 def _build_chunks(md_files, progress_cb=None):
-    progress = lambda m: _emit(progress_cb, m)
+    progress = _make_progress(progress_cb)
     progress(f"Found {len(md_files)} file(s)")
     progress("Cleaning and chunking text...")
 
@@ -115,7 +133,9 @@ def _build_chunks(md_files, progress_cb=None):
             raw = f.read()
         cleaned = clean(raw)
         source_name = md_file.stem
-        file_chunks = split_to_chunks(cleaned, config.MAX_WORDS_PER_CHUNK, source_file=source_name)
+        file_chunks = split_to_chunks(
+            cleaned, config.MAX_WORDS_PER_CHUNK, source_file=source_name
+        )
         chunks.extend(file_chunks)
         progress(f"  {source_name}: {len(file_chunks)} chunk(s)")
 
@@ -158,19 +178,23 @@ def load_cached_segments(cache_dir: Path) -> list:
         storage.init_schema()
         segments = storage.list_all_segments()
         # Filter to only valid segments with normalized_text
-        result = [s for s in segments if isinstance(s, dict) and s.get("normalized_text")]
+        result = [
+            s for s in segments if isinstance(s, dict) and s.get("normalized_text")
+        ]
         return result
     except Exception as e:
         logger.warning(f"Could not load cached segments: {e}")
         return []
 
 
-def prepare_segments_for_project(project, output_root, progress_cb=None, llm=None, stop_event=None):
+def prepare_segments_for_project(
+    project, output_root, progress_cb=None, llm=None, stop_event=None
+):
     """Stage 1 for a single project. Returns segment list.
 
     `llm` may be passed in pre-loaded so multiple projects share one LLM load.
     """
-    progress = lambda m: _emit(progress_cb, m)
+    progress = _make_progress(progress_cb)
     name = project["name"]
     files = project["files"]
     output_root = Path(output_root)
@@ -189,7 +213,9 @@ def prepare_segments_for_project(project, output_root, progress_cb=None, llm=Non
             return []
 
         if len(files) > 1:
-            ordered_files = _order_files(project["input_dir"], llm, cache_dir, progress_cb)
+            ordered_files = _order_files(
+                project["input_dir"], llm, cache_dir, progress_cb
+            )
         else:
             ordered_files = files
         progress(f"[{name}] file order: " + ", ".join(p.name for p in ordered_files))
@@ -199,7 +225,9 @@ def prepare_segments_for_project(project, output_root, progress_cb=None, llm=Non
             return []
 
         progress(f"[{name}] emotion analysis...")
-        segments = llm.process_all(chunks, cache_dir, progress_cb=progress_cb, stop_event=stop_event)
+        segments = llm.process_all(
+            chunks, cache_dir, progress_cb=progress_cb, stop_event=stop_event
+        )
         progress(f"[{name}] {len(segments)} TTS segments ready")
         return segments
     finally:
@@ -207,7 +235,9 @@ def prepare_segments_for_project(project, output_root, progress_cb=None, llm=Non
             llm.unload()
 
 
-def prepare_segments(input_dir, output_dir, progress_cb=None, stop_event=None, selected_names=None):
+def prepare_segments(
+    input_dir, output_dir, progress_cb=None, stop_event=None, selected_names=None
+):
     """Stage 1 for projects under input_dir. Returns dict {project_name: segments}.
 
     `selected_names` (optional iterable): when given, restrict processing to
@@ -215,7 +245,7 @@ def prepare_segments(input_dir, output_dir, progress_cb=None, stop_event=None, s
     """
     input_dir = Path(input_dir)
     output_dir = Path(output_dir)
-    progress = lambda m: _emit(progress_cb, m)
+    progress = _make_progress(progress_cb)
 
     progress("Discovering projects in input directory...")
     projects = discover_projects(input_dir)
@@ -228,7 +258,9 @@ def prepare_segments(input_dir, output_dir, progress_cb=None, stop_event=None, s
         if not projects:
             progress("No selected projects to process")
             return {}
-    progress(f"Found {len(projects)} project(s): " + ", ".join(p["name"] for p in projects))
+    progress(
+        f"Found {len(projects)} project(s): " + ", ".join(p["name"] for p in projects)
+    )
 
     progress("Loading LLM...")
     llm = LLMNormalizer(config.LLM_MODEL_PATH)
@@ -240,7 +272,9 @@ def prepare_segments(input_dir, output_dir, progress_cb=None, stop_event=None, s
             if stop_event and stop_event.is_set():
                 progress("Stopped by user")
                 break
-            segments = prepare_segments_for_project(project, output_dir, progress_cb, llm=llm, stop_event=stop_event)
+            segments = prepare_segments_for_project(
+                project, output_dir, progress_cb, llm=llm, stop_event=stop_event
+            )
             results[project["name"]] = segments
     finally:
         llm.unload()
@@ -249,16 +283,23 @@ def prepare_segments(input_dir, output_dir, progress_cb=None, stop_event=None, s
     return results
 
 
-def _assemble_chapters(wav_paths: list, segments: list, final_path: Path, project_name: str, progress_cb=None) -> list:
+def _assemble_chapters(
+    wav_paths: list,
+    segments: list,
+    final_path: Path,
+    project_name: str,
+    progress_cb=None,
+) -> list:
     """Assemble WAV files into per-chapter MP3s based on source_file metadata.
 
     Returns list of output file paths.
     """
-    progress = lambda m: _emit(progress_cb, m)
+    progress = _make_progress(progress_cb)
     final_path = Path(final_path)
     final_path.mkdir(parents=True, exist_ok=True)
 
     from collections import defaultdict
+
     by_source = defaultdict(list)
     for i, seg in enumerate(segments):
         source = seg.get("source_file", "default")
@@ -271,7 +312,11 @@ def _assemble_chapters(wav_paths: list, segments: list, final_path: Path, projec
         seg_indices = [i for i, _ in by_source[source_name]]
         chapter_wavs = [wav_paths[i] for i in seg_indices if i < len(wav_paths)]
         if chapter_wavs:
-            assembled = assemble(chapter_wavs, [seg for _, seg in by_source[source_name]], final_path / "audiobook.mp3")
+            assembled = assemble(
+                chapter_wavs,
+                [seg for _, seg in by_source[source_name]],
+                final_path / "audiobook.mp3",
+            )
             progress(f"[{project_name}] done -> {assembled}")
             output_files.append(assembled)
     else:
@@ -284,16 +329,29 @@ def _assemble_chapters(wav_paths: list, segments: list, final_path: Path, projec
                 progress(f"  chapter {chapter_num} ({source_name}): no WAVs found")
                 continue
             out_file = final_path / f"chapter_{chapter_num:02d}.mp3"
-            assembled = assemble(chapter_wavs, [seg for _, seg in by_source[source_name]], out_file)
-            progress(f"  chapter {chapter_num} ({source_name}): {len(chapter_wavs)} chunks -> {assembled}")
+            assembled = assemble(
+                chapter_wavs, [seg for _, seg in by_source[source_name]], out_file
+            )
+            progress(
+                f"  chapter {chapter_num} ({source_name}): {len(chapter_wavs)} chunks -> {assembled}"
+            )
             output_files.append(assembled)
 
     return output_files
 
 
-def generate_audio_for_project(project_name, segments, output_root, progress_cb=None, tts=None, stop_event=None, narrator_prompt=None, chunk_done_cb=None):
+def generate_audio_for_project(
+    project_name,
+    segments,
+    output_root,
+    progress_cb=None,
+    tts=None,
+    stop_event=None,
+    narrator_prompt=None,
+    chunk_done_cb=None,
+):
     """Stage 2 for a single project. Returns path to assembled audiobook."""
-    progress = lambda m: _emit(progress_cb, m)
+    progress = _make_progress(progress_cb)
     output_root = Path(output_root)
     project_out = output_root / project_name
 
@@ -301,7 +359,9 @@ def generate_audio_for_project(project_name, segments, output_root, progress_cb=
         progress(f"[{project_name}] no segments, skipping")
         return None
 
-    progress(f"--- Audio gen for project '{project_name}' ({len(segments)} segments) ---")
+    progress(
+        f"--- Audio gen for project '{project_name}' ({len(segments)} segments) ---"
+    )
 
     own_tts = tts is None
     if own_tts:
@@ -311,10 +371,17 @@ def generate_audio_for_project(project_name, segments, output_root, progress_cb=
 
     try:
         chunk_output_dir = project_out / "chunks"
-        wav_paths = tts.process_all(segments, chunk_output_dir, stop_event=stop_event, chunk_done_cb=chunk_done_cb)
+        wav_paths = tts.process_all(
+            segments,
+            chunk_output_dir,
+            stop_event=stop_event,
+            chunk_done_cb=chunk_done_cb,
+        )
 
         if stop_event and stop_event.is_set():
-            progress(f"[{project_name}] stopped — {len(wav_paths)} chunk(s) generated so far")
+            progress(
+                f"[{project_name}] stopped — {len(wav_paths)} chunk(s) generated so far"
+            )
             return None
 
         progress(f"[{project_name}] denoising {len(wav_paths)} chunks...")
@@ -332,7 +399,9 @@ def generate_audio_for_project(project_name, segments, output_root, progress_cb=
         final_path.mkdir(parents=True, exist_ok=True)
 
         if config.CHAPTER_BY_CHAPTER:
-            output_files = _assemble_chapters(wav_paths, segments, final_path, project_name, progress_cb)
+            output_files = _assemble_chapters(
+                wav_paths, segments, final_path, project_name, progress_cb
+            )
             if output_files:
                 progress(f"[{project_name}] done -> chapter files generated")
                 return output_files[0]
@@ -346,16 +415,31 @@ def generate_audio_for_project(project_name, segments, output_root, progress_cb=
             tts.unload()
 
 
-def generate_audio(segments_by_project, output_dir, progress_cb=None, stop_event=None, narrator_prompt=None, chunk_done_cb=None):
+def generate_audio(
+    segments_by_project,
+    output_dir,
+    progress_cb=None,
+    stop_event=None,
+    narrator_prompt=None,
+    chunk_done_cb=None,
+):
     """Stage 2 for all projects.
 
     Accepts either {project_name: segments} (preferred) or a flat list (legacy single project).
     """
     output_dir = Path(output_dir)
-    progress = lambda m: _emit(progress_cb, m)
+    progress = _make_progress(progress_cb)
 
     if isinstance(segments_by_project, list):
-        return generate_audio_for_project(output_dir.name or "project", segments_by_project, output_dir.parent or output_dir, progress_cb, stop_event=stop_event, narrator_prompt=narrator_prompt, chunk_done_cb=chunk_done_cb)
+        return generate_audio_for_project(
+            output_dir.name or "project",
+            segments_by_project,
+            output_dir.parent or output_dir,
+            progress_cb,
+            stop_event=stop_event,
+            narrator_prompt=narrator_prompt,
+            chunk_done_cb=chunk_done_cb,
+        )
 
     if not segments_by_project:
         progress("No segments to synthesize")
@@ -371,7 +455,16 @@ def generate_audio(segments_by_project, output_dir, progress_cb=None, stop_event
             if stop_event and stop_event.is_set():
                 progress("Stopped by user")
                 break
-            results[name] = generate_audio_for_project(name, segments, output_dir, progress_cb, tts=tts, stop_event=stop_event, narrator_prompt=narrator_prompt, chunk_done_cb=chunk_done_cb)
+            results[name] = generate_audio_for_project(
+                name,
+                segments,
+                output_dir,
+                progress_cb,
+                tts=tts,
+                stop_event=stop_event,
+                narrator_prompt=narrator_prompt,
+                chunk_done_cb=chunk_done_cb,
+            )
     finally:
         tts.unload()
 
@@ -386,7 +479,6 @@ def _mfcc_fingerprint(samples, sample_rate):
     """
     try:
         import librosa
-        import numpy as np
     except ImportError:
         return None
     samples = samples.astype("float32")
@@ -400,6 +492,7 @@ def _mfcc_fingerprint(samples, sample_rate):
 
 def _cosine(a, b):
     import numpy as np
+
     denom = (np.linalg.norm(a) * np.linalg.norm(b)) or 1e-10
     return float(np.dot(a, b) / denom)
 
@@ -439,16 +532,19 @@ def cleanup_noisy_chunks(
         return {}
 
     output_dir = Path(output_dir)
-    progress = lambda m: _emit(progress_cb, m)
+    progress = _make_progress(progress_cb)
     results = {}
 
-    FRAME_MS = 30          # analysis window length in ms
-    FLATNESS_THRESH = 0.75 # above this fraction → noise  (speech ≈ 0.1–0.5, white noise ≈ 1.0)
-    MIN_RMS = 150          # ignore frames quieter than this (silence, not noise)
-    CLIP_THRESH = 32000    # int16 samples above this count as clipped
+    FRAME_MS = 30  # analysis window length in ms
+    FLATNESS_THRESH = (
+        0.75  # above this fraction → noise  (speech ≈ 0.1–0.5, white noise ≈ 1.0)
+    )
+    MIN_RMS = 150  # ignore frames quieter than this (silence, not noise)
+    CLIP_THRESH = 32000  # int16 samples above this count as clipped
 
     # Load voice reference fingerprint once
     from . import config
+
     ref_path = Path(voice_ref_path) if voice_ref_path else Path(config.VOICE_REF_PATH)
     ref_fp = None
     if ref_path.exists():
@@ -458,7 +554,11 @@ def cleanup_noisy_chunks(
                 samples_ref = samples_ref.mean(axis=1)
             ref_fp = _mfcc_fingerprint(samples_ref, sr_ref)
             if ref_fp is None:
-                progress(f"Voice reference fingerprint unavailable (librosa missing or ref too short); skipping voice-match check")
+                progress(
+                    "Voice reference fingerprint unavailable"
+                    " (librosa missing or ref too short);"
+                    " skipping voice-match check"
+                )
         except Exception as e:
             logger.warning(f"Failed to load voice reference {ref_path}: {e}")
     else:
@@ -467,7 +567,11 @@ def cleanup_noisy_chunks(
     if project_names:
         dirs = [output_dir / n for n in project_names if (output_dir / n).is_dir()]
     else:
-        dirs = sorted([d for d in output_dir.iterdir() if d.is_dir()]) if output_dir.exists() else []
+        dirs = (
+            sorted([d for d in output_dir.iterdir() if d.is_dir()])
+            if output_dir.exists()
+            else []
+        )
 
     if not dirs:
         progress("No project output directories found for cleanup")
@@ -485,7 +589,9 @@ def cleanup_noisy_chunks(
             progress(f"[{project_name}] no chunk WAV files found")
             continue
 
-        progress(f"[{project_name}] auditing {len(wav_files)} chunks (discriminator + volume + voice match)...")
+        progress(
+            f"[{project_name}] auditing {len(wav_files)} chunks (discriminator + volume + voice match)..."
+        )
         edited = 0
         deleted: list[tuple[str, str]] = []
         already_removed: set[str] = set()
@@ -511,8 +617,8 @@ def cleanup_noisy_chunks(
                 voiced_rms = []
 
                 for fi in range(n_frames):
-                    frame = samples_f[fi * frame_size:(fi + 1) * frame_size]
-                    rms = np.sqrt(np.mean(frame ** 2))
+                    frame = samples_f[fi * frame_size : (fi + 1) * frame_size]
+                    rms = np.sqrt(np.mean(frame**2))
 
                     if rms < MIN_RMS:
                         frame_is_noise.append(False)  # silence — leave it alone
@@ -535,9 +641,13 @@ def cleanup_noisy_chunks(
                 if n_frames < 5:
                     fail_reason = f"too short ({n_frames} frames)"
                 elif speech_ratio < min_speech_ratio:
-                    fail_reason = f"low speech ratio {speech_ratio:.0%} (<{min_speech_ratio:.0%})"
+                    fail_reason = (
+                        f"low speech ratio {speech_ratio:.0%} (<{min_speech_ratio:.0%})"
+                    )
                 elif avg_rms < min_avg_rms:
-                    fail_reason = f"too quiet (avg RMS {avg_rms:.0f} < {min_avg_rms:.0f})"
+                    fail_reason = (
+                        f"too quiet (avg RMS {avg_rms:.0f} < {min_avg_rms:.0f})"
+                    )
                 elif clip_ratio > max_clip_ratio:
                     fail_reason = f"clipping {clip_ratio:.1%} (>{max_clip_ratio:.1%})"
                 else:
@@ -554,6 +664,7 @@ def cleanup_noisy_chunks(
                     # chunk_NNNNNN.wav and chunk_NNNNNN_K.wav share the same NNNNNN id;
                     # glob them all and remove together.
                     import re as _re
+
                     m = _re.match(r"(chunk_\d+)", wav_path.stem)
                     base = m.group(1) if m else wav_path.stem
                     siblings = sorted(chunks_dir.glob(f"{base}*.wav"))
@@ -571,7 +682,8 @@ def cleanup_noisy_chunks(
                         continue
                     sibling_note = (
                         f" (+{len(removed_names) - 1} sibling part(s))"
-                        if len(removed_names) > 1 else ""
+                        if len(removed_names) > 1
+                        else ""
                     )
                     for nm in removed_names:
                         deleted.append((nm, fail_reason))
@@ -629,13 +741,15 @@ def cleanup_noisy_chunks(
     return results
 
 
-def assemble_final_for_project(project_name, segments, output_root, progress_cb=None, stop_event=None):
+def assemble_final_for_project(
+    project_name, segments, output_root, progress_cb=None, stop_event=None
+):
     """Assemble final audio from existing chunk WAVs without re-running TTS synthesis.
 
     Groups segments by source_file and emits per-chapter MP3s if multiple chapters detected.
     Any chunks missing from disk are simply absent from the assembled output.
     """
-    progress = lambda m: _emit(progress_cb, m)
+    progress = _make_progress(progress_cb)
     output_root = Path(output_root)
     project_out = output_root / project_name
     chunks_dir = project_out / "chunks"
@@ -670,6 +784,7 @@ def assemble_final_for_project(project_name, segments, output_root, progress_cb=
 
     # Group segments by source_file for per-chapter assembly
     from collections import defaultdict
+
     by_source = defaultdict(list)
     for i, seg in enumerate(segments):
         source = seg.get("source_file", "default")
@@ -701,8 +816,12 @@ def assemble_final_for_project(project_name, segments, output_root, progress_cb=
                 progress(f"  chapter {chapter_num} ({source_name}): no WAVs found")
                 continue
             out_file = final_path / f"chapter_{chapter_num:02d}.mp3"
-            assembled = assemble(chapter_wavs, [seg for _, seg in by_source[source_name]], out_file)
-            progress(f"  chapter {chapter_num} ({source_name}): {len(chapter_wavs)} chunks -> {assembled}")
+            assembled = assemble(
+                chapter_wavs, [seg for _, seg in by_source[source_name]], out_file
+            )
+            progress(
+                f"  chapter {chapter_num} ({source_name}): {len(chapter_wavs)} chunks -> {assembled}"
+            )
             output_files.append(assembled)
 
     return output_files[0] if output_files else None
@@ -714,7 +833,7 @@ def assemble_final(segments_by_project, output_dir, progress_cb=None, stop_event
     segments_by_project provides metadata (ends_paragraph etc.) for silence insertion.
     """
     output_dir = Path(output_dir)
-    progress = lambda m: _emit(progress_cb, m)
+    progress = _make_progress(progress_cb)
 
     if not segments_by_project:
         progress("No segments loaded; run Stage 1 first to load segment metadata")
@@ -725,7 +844,9 @@ def assemble_final(segments_by_project, output_dir, progress_cb=None, stop_event
         if stop_event and stop_event.is_set():
             progress("Stopped by user")
             break
-        results[name] = assemble_final_for_project(name, segments, output_dir, progress_cb, stop_event)
+        results[name] = assemble_final_for_project(
+            name, segments, output_dir, progress_cb, stop_event
+        )
 
     progress(f"Assemble Final complete for {len(results)} project(s)")
     return results
@@ -737,4 +858,3 @@ def run(input_dir, output_dir, progress_cb=None):
     if not by_project:
         return {}
     return generate_audio(by_project, output_dir, progress_cb)
-

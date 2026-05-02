@@ -14,6 +14,7 @@
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 """JSON-file-based storage backend for chunk metadata and segments."""
+
 import json
 import logging
 from pathlib import Path
@@ -144,8 +145,8 @@ class JsonStorage(StorageBackend):
     def clear(self) -> None:
         """Delete all JSON files in cache."""
         import shutil
+
         for d in [self.analyze_dir, self.segments_dir]:
             if d.exists():
                 shutil.rmtree(d)
         self.init_schema()
-

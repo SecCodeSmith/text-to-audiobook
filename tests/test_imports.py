@@ -21,11 +21,11 @@ session-scoped fixture that pops every mocked module from sys.modules
 exactly once. After that, normal imports return the real package and
 sys.modules is populated correctly for the remaining tests.
 """
+
 import importlib
 import sys
 
 import pytest
-
 
 _MOCKED_BY_CONFTEST = (
     "torch",
@@ -87,19 +87,23 @@ def _restore_real_imports():
 )
 def test_dependency_imports(module_name, required_attr):
     mod = importlib.import_module(module_name)
-    assert hasattr(mod, required_attr), (
-        f"{module_name} is installed but is missing attribute {required_attr!r}"
-    )
+    assert hasattr(
+        mod, required_attr
+    ), f"{module_name} is installed but is missing attribute {required_attr!r}"
 
 
 def test_qwen_tts_has_required_generation_methods():
     qwen_tts = importlib.import_module("qwen_tts")
     cls = qwen_tts.Qwen3TTSModel
-    for method in ("from_pretrained", "generate_voice_design",
-                   "generate_voice_clone", "generate_custom_voice"):
-        assert hasattr(cls, method), (
-            f"Qwen3TTSModel.{method} is missing — package version drifted?"
-        )
+    for method in (
+        "from_pretrained",
+        "generate_voice_design",
+        "generate_voice_clone",
+        "generate_custom_voice",
+    ):
+        assert hasattr(
+            cls, method
+        ), f"Qwen3TTSModel.{method} is missing — package version drifted?"
 
 
 def test_transformers_version_is_recent_enough():
@@ -107,14 +111,16 @@ def test_transformers_version_is_recent_enough():
     version = transformers.__version__
     parts = version.split(".")
     major, minor = int(parts[0]), int(parts[1])
-    assert (major, minor) >= (4, 45), (
-        f"transformers {version} is too old; need >= 4.45.0 (see requirements.txt)"
-    )
+    assert (major, minor) >= (
+        4,
+        45,
+    ), f"transformers {version} is too old; need >= 4.45.0 (see requirements.txt)"
 
 
 def test_qwen_tts_registers_qwen3_tts_model_type():
     """Qwen3TTSConfig must declare model_type='qwen3_tts' so wrapper registration works."""
     from qwen_tts.core.models.modeling_qwen3_tts import Qwen3TTSConfig
+
     assert Qwen3TTSConfig.model_type == "qwen3_tts"
 
 
@@ -133,4 +139,3 @@ def test_project_modules_importable():
     ):
         sys.modules.pop(mod, None)
         importlib.import_module(mod)
-

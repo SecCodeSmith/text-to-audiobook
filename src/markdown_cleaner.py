@@ -15,41 +15,41 @@
 
 import re
 
+
 def clean(md: str) -> str:
-    lines = md.split('\n')
+    lines = md.split("\n")
     cleaned = []
 
     in_code_fence = False
     for line in lines:
-        if line.strip().startswith('```'):
+        if line.strip().startswith("```"):
             in_code_fence = not in_code_fence
             continue
 
         if in_code_fence:
             continue
 
-        if re.match(r'^\s*#+\s', line):
+        if re.match(r"^\s*#+\s", line):
             continue
 
-        line = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', line)
+        line = re.sub(r"\[([^\]]+)\]\([^\)]+\)", r"\1", line)
 
-        line = re.sub(r'\*\*([^\*]+)\*\*', r'\1', line)
-        line = re.sub(r'\*([^\*]+)\*', r'\1', line)
-        line = re.sub(r'__([^_]+)__', r'\1', line)
-        line = re.sub(r'_([^_]+)_', r'\1', line)
+        line = re.sub(r"\*\*([^\*]+)\*\*", r"\1", line)
+        line = re.sub(r"\*([^\*]+)\*", r"\1", line)
+        line = re.sub(r"__([^_]+)__", r"\1", line)
+        line = re.sub(r"_([^_]+)_", r"\1", line)
 
-        line = re.sub(r'`([^`]+)`', r'\1', line)
+        line = re.sub(r"`([^`]+)`", r"\1", line)
 
-        line = re.sub(r'https?://[^\s]+', '', line)
+        line = re.sub(r"https?://[^\s]+", "", line)
 
-        line = re.sub(r'<[^>]+>', '', line)
+        line = re.sub(r"<[^>]+>", "", line)
 
         if line.strip():
             cleaned.append(line)
-        elif cleaned and cleaned[-1] != '':
-            cleaned.append('')
+        elif cleaned and cleaned[-1] != "":
+            cleaned.append("")
 
-    text = '\n'.join(cleaned)
-    text = re.sub(r'\n{3,}', '\n\n', text)
+    text = "\n".join(cleaned)
+    text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
-

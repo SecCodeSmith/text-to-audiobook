@@ -14,19 +14,19 @@
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 """Tests for storage abstraction and per-chapter generation."""
-import json
+
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from src.storage import StorageBackend
-from src.storage_json import JsonStorage
-from src.storage_sqlite import SqliteStorage
-from src.storage_factory import create_storage
 from src.chunker import Chunk, split_to_chunks
 from src.pipeline import _build_chunks
+from src.storage import StorageBackend
+from src.storage_factory import create_storage
+from src.storage_json import JsonStorage
+from src.storage_sqlite import SqliteStorage
 
 
 class TestStorageJsonBackend:
@@ -314,8 +314,12 @@ class TestBuildChunksSourceTracking:
             md_dir = Path(tmpdir) / "md"
             md_dir.mkdir()
 
-            (md_dir / "chapter_01.md").write_text("This is chapter one. It has content.")
-            (md_dir / "chapter_02.md").write_text("This is chapter two. Also has content.")
+            (md_dir / "chapter_01.md").write_text(
+                "This is chapter one. It has content."
+            )
+            (md_dir / "chapter_02.md").write_text(
+                "This is chapter two. Also has content."
+            )
 
             # Build chunks
             md_files = sorted(md_dir.glob("*.md"))
@@ -334,7 +338,9 @@ class TestBuildChunksSourceTracking:
             md_dir = Path(tmpdir) / "md"
             md_dir.mkdir()
 
-            (md_dir / "01_first.md").write_text("First sentence. Second sentence. Third sentence.")
+            (md_dir / "01_first.md").write_text(
+                "First sentence. Second sentence. Third sentence."
+            )
             (md_dir / "02_second.md").write_text("Fourth sentence. Fifth sentence.")
 
             md_files = sorted(md_dir.glob("*.md"))
@@ -408,6 +414,7 @@ class TestPerChapterGrouping:
         ]
 
         from collections import defaultdict
+
         by_source = defaultdict(list)
         for i, seg in enumerate(segments):
             source = seg.get("source_file", "default")
@@ -423,6 +430,7 @@ class TestPerChapterGrouping:
         segments = [{"source_file": "only_one", "text": "content"}]
 
         from collections import defaultdict
+
         by_source = defaultdict(list)
         for i, seg in enumerate(segments):
             by_source[seg.get("source_file", "default")].append((i, seg))
@@ -443,12 +451,15 @@ class TestPerChapterGrouping:
         ]
 
         from collections import defaultdict
+
         by_source = defaultdict(list)
         for i, seg in enumerate(segments):
             by_source[seg.get("source_file", "default")].append((i, seg))
 
         sorted_sources = sorted(by_source.keys())
-        output_names = [f"chapter_{i:02d}.mp3" for i in range(1, len(sorted_sources) + 1)]
+        output_names = [
+            f"chapter_{i:02d}.mp3" for i in range(1, len(sorted_sources) + 1)
+        ]
 
         assert len(output_names) == 3
         assert output_names[0] == "chapter_01.mp3"
@@ -490,16 +501,17 @@ class TestConfigStorageBackend:
     def test_storage_backend_config_exists(self):
         """config should have STORAGE_BACKEND setting."""
         from src import config
+
         assert hasattr(config, "STORAGE_BACKEND")
         assert config.STORAGE_BACKEND in ["json", "sqlite"]
 
     def test_storage_backend_in_settings_keys(self):
         """STORAGE_BACKEND should be in _SETTINGS_KEYS for persistence."""
         from src import config
+
         assert "STORAGE_BACKEND" in config._SETTINGS_KEYS
         assert config._SETTINGS_KEYS["STORAGE_BACKEND"] == str
 
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

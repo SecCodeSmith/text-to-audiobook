@@ -14,13 +14,14 @@
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 """Factory for creating storage backend instances based on config."""
+
 import logging
 from pathlib import Path
 
+from . import config
 from .storage import StorageBackend
 from .storage_json import JsonStorage
 from .storage_sqlite import SqliteStorage
-from . import config
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,5 @@ def create_storage(cache_dir: Path) -> StorageBackend:
         return SqliteStorage(cache_dir)
     else:
         raise ValueError(
-            f"Unknown STORAGE_BACKEND: {backend!r}. "
-            f"Must be 'json' or 'sqlite'."
+            f"Unknown STORAGE_BACKEND: {backend!r}. " f"Must be 'json' or 'sqlite'."
         )
-

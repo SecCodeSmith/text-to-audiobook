@@ -13,30 +13,33 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+"""TTS engine module for synthesizing audio from text using Qwen3-TTS."""
+
 import gc
 import logging
 import re
 from pathlib import Path
+from typing import Any
 
 try:
     import torch
 except ImportError:
-    torch = None
+    torch: Any = None  # type: ignore[no-redef]
 
 try:
     import numpy as np
 except ImportError:
-    np = None
+    np: Any = None  # type: ignore[no-redef]
 
 try:
     import soundfile as sf
 except ImportError:
-    sf = None
+    sf: Any = None  # type: ignore[no-redef]
 
 try:
     from qwen_tts import Qwen3TTSModel
 except ImportError:
-    Qwen3TTSModel = None
+    Qwen3TTSModel: Any = None  # type: ignore[no-redef]
 
 from . import config
 
@@ -52,6 +55,8 @@ _VOICE_REF_TEXT = (
 
 
 class TTSEngine:
+    """Wrapper around Qwen3-TTS for voice-cloned audio synthesis."""
+
     def __init__(
         self,
         model_name: str = config.TTS_MODEL_NAME,
@@ -59,9 +64,9 @@ class TTSEngine:
     ):
         self.model_name = model_name
         self.voice_design_model_name = voice_design_model_name
-        self.engine = None
-        self.anchor_path = None
-        self._voice_ref_path = None
+        self.engine: Any = None
+        self.anchor_path: Path | None = None
+        self._voice_ref_path: Path | None = None
 
     # ------------------------------------------------------------------
     # Load / unload
@@ -82,7 +87,11 @@ class TTSEngine:
         kwargs = self._make_load_kwargs()
         engine = Qwen3TTSModel.from_pretrained(self.model_name, **kwargs)
         try:
-            if torch is not None and hasattr(engine, "model") and engine.model is not None:
+            if (
+                torch is not None
+                and hasattr(engine, "model")
+                and engine.model is not None
+            ):
                 try:
                     engine.model = torch.compile(engine.model, mode="reduce-overhead")
                 except Exception as e:
@@ -96,7 +105,9 @@ class TTSEngine:
                 top_p=0.9,
             )
             if not wavs:
-                raise RuntimeError("Base model returned no audio for reference generation")
+                raise RuntimeError(
+                    "Base model returned no audio for reference generation"
+                )
             ref_path.parent.mkdir(parents=True, exist_ok=True)
             sf.write(str(ref_path), wavs[0], sr)
             logger.info(f"Voice reference saved: {ref_path}")
@@ -106,7 +117,7 @@ class TTSEngine:
             if torch is not None and torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-    def load(self, narrator_prompt: str = None):
+    def load(self, narrator_prompt: str | None = None):
         if Qwen3TTSModel is None:
             logger.warning("qwen_tts not available, using mock mode")
             return
@@ -122,10 +133,18 @@ class TTSEngine:
         logger.info(f"Loading TTS model: {self.model_name} ({'GPU' if gpu else 'CPU'})")
         self.engine = Qwen3TTSModel.from_pretrained(self.model_name, **kwargs)
 
-        if torch is not None and hasattr(self.engine, "model") and self.engine.model is not None:
+        if (
+            torch is not None
+            and hasattr(self.engine, "model")
+            and self.engine.model is not None
+        ):
             try:
-                logger.info("Compiling model with torch.compile for optimized inference...")
-                self.engine.model = torch.compile(self.engine.model, mode="reduce-overhead")
+                logger.info(
+                    "Compiling model with torch.compile for optimized inference..."
+                )
+                self.engine.model = torch.compile(
+                    self.engine.model, mode="reduce-overhead"
+                )
             except Exception as e:
                 logger.debug(f"torch.compile not available or failed: {e}")
 
@@ -213,7 +232,7 @@ class TTSEngine:
         # paragraph that's still over target. A single sentence over target
         # is kept whole — splitting mid-sentence would damage prosody.
         atoms: list[tuple[str, int]] = []
-        for para in re.split(r'\n\s*\n', text):
+        for para in re.split(r"\n\s*\n", text):
             para = para.strip()
             if not para:
                 continue
@@ -221,7 +240,7 @@ class TTSEngine:
             if p_count <= target:
                 atoms.append((para, p_count))
                 continue
-            for sent in re.split(r'(?<=[.!?])\s+', para):
+            for sent in re.split(r"(?<=[.!?])\s+", para):
                 sent = sent.strip()
                 if not sent:
                     continue
@@ -234,8 +253,7 @@ class TTSEngine:
         current_count = 0
         for atom, atom_count in atoms:
             if current and (
-                current_count + atom_count > limit
-                or current_count >= target
+                current_count + atom_count > limit or current_count >= target
             ):
                 parts.append(" ".join(current))
                 current = [atom]
@@ -264,8 +282,9 @@ class TTSEngine:
     # Core synthesis
     # ------------------------------------------------------------------
 
-    def _synthesize_single(self, text: str, out_path: Path,
-                           language: str = DEFAULT_LANGUAGE) -> Path:
+    def _synthesize_single(
+        self, text: str, out_path: Path, language: str = DEFAULT_LANGUAGE
+    ) -> Path:
         out_path = Path(out_path)
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -286,8 +305,9 @@ class TTSEngine:
         sf.write(str(out_path), wavs[0], sr)
         return out_path
 
-    def _synthesize(self, text: str, out_path: Path,
-                    language: str = DEFAULT_LANGUAGE) -> list[Path]:
+    def _synthesize(
+        self, text: str, out_path: Path, language: str = DEFAULT_LANGUAGE
+    ) -> list[Path]:
         out_path = Path(out_path)
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -313,7 +333,9 @@ class TTSEngine:
             # checking which file exists.
             output_paths = []
             for idx, part in enumerate(parts):
-                part_out_path = out_path.parent / f"{out_path.stem}_{idx}{out_path.suffix}"
+                part_out_path = (
+                    out_path.parent / f"{out_path.stem}_{idx}{out_path.suffix}"
+                )
                 if part_out_path.exists():
                     logger.info(
                         f"Part {idx + 1}/{len(parts)} already exists, reusing: {part_out_path.name}"
@@ -331,8 +353,13 @@ class TTSEngine:
             logger.error(f"TTS synthesis failed: {e}")
             raise
 
-    def synthesize_first(self, text: str, narrator_prompt: str, out_path: Path,
-                         language: str = DEFAULT_LANGUAGE) -> list[Path]:
+    def synthesize_first(
+        self,
+        text: str,
+        narrator_prompt: str,
+        out_path: Path,
+        language: str = DEFAULT_LANGUAGE,
+    ) -> list[Path]:
         """Synthesize the first chunk using voice clone with the voice design reference.
 
         The voice reference is created with voice design during load() for narrator consistency.
@@ -370,7 +397,9 @@ class TTSEngine:
 
             output_paths = []
             for idx, part in enumerate(parts):
-                part_out_path = out_path.parent / f"{out_path.stem}_{idx}{out_path.suffix}"
+                part_out_path = (
+                    out_path.parent / f"{out_path.stem}_{idx}{out_path.suffix}"
+                )
                 if part_out_path.exists():
                     logger.info(
                         f"First chunk part {idx + 1}/{len(parts)} already exists, reusing: {part_out_path.name}"
@@ -402,8 +431,13 @@ class TTSEngine:
             logger.error(f"TTS synthesis failed: {e}")
             raise
 
-    def synthesize_with_anchor(self, text: str, anchor_path: Path, out_path: Path,
-                               language: str = DEFAULT_LANGUAGE) -> list[Path]:
+    def synthesize_with_anchor(
+        self,
+        text: str,
+        anchor_path: Path,
+        out_path: Path,
+        language: str = DEFAULT_LANGUAGE,
+    ) -> list[Path]:
         """Synthesize a chunk using the anchor voice reference.
 
         This uses generate_voice_clone with the anchor WAV to clone the voice from the first chunk.
@@ -440,7 +474,9 @@ class TTSEngine:
 
             output_paths = []
             for idx, part in enumerate(parts):
-                part_out_path = out_path.parent / f"{out_path.stem}_{idx}{out_path.suffix}"
+                part_out_path = (
+                    out_path.parent / f"{out_path.stem}_{idx}{out_path.suffix}"
+                )
                 if part_out_path.exists():
                     logger.info(
                         f"Part {idx + 1}/{len(parts)} already exists, reusing: {part_out_path.name}"
@@ -514,8 +550,9 @@ class TTSEngine:
         if renamed:
             logger.info(f"Migrated {renamed} chunk(s) to 0-indexed multi-part naming")
 
-    def process_all(self, json_payloads: list, output_dir: Path, stop_event=None,
-                    chunk_done_cb=None) -> list:
+    def process_all(
+        self, json_payloads: list, output_dir: Path, stop_event=None, chunk_done_cb=None
+    ) -> list:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -525,7 +562,9 @@ class TTSEngine:
 
         for i, payload in enumerate(json_payloads):
             if stop_event is not None and stop_event.is_set():
-                logger.info(f"Stop requested after {i}/{len(json_payloads)} chunks generated")
+                logger.info(
+                    f"Stop requested after {i}/{len(json_payloads)} chunks generated"
+                )
                 break
 
             out_path = output_dir / f"chunk_{i:06d}.wav"
@@ -544,7 +583,9 @@ class TTSEngine:
                     existing_parts.append(p)
 
             if existing_parts:
-                logger.debug(f"Chunk {i} already exists ({len(existing_parts)} part(s)), skipping")
+                logger.debug(
+                    f"Chunk {i} already exists ({len(existing_parts)} part(s)), skipping"
+                )
                 wav_paths.extend(existing_parts)
                 if i == 0:
                     self.anchor_path = existing_parts[0]
@@ -557,11 +598,17 @@ class TTSEngine:
 
             try:
                 if i == 0:
-                    chunk_wav_paths = self.synthesize_first(text, config.NARRATOR_PROMPT, out_path, language)
+                    chunk_wav_paths = self.synthesize_first(
+                        text, config.NARRATOR_PROMPT, out_path, language
+                    )
                 elif self.anchor_path:
-                    chunk_wav_paths = self.synthesize_with_anchor(text, self.anchor_path, out_path, language)
+                    chunk_wav_paths = self.synthesize_with_anchor(
+                        text, self.anchor_path, out_path, language
+                    )
                 else:
-                    chunk_wav_paths = self._synthesize(text, out_path, language=language)
+                    chunk_wav_paths = self._synthesize(
+                        text, out_path, language=language
+                    )
                 if i == 0:
                     self.anchor_path = chunk_wav_paths[0]
             except KeyboardInterrupt:
@@ -584,8 +631,14 @@ class TTSEngine:
                 torch.cuda.empty_cache()
 
             if (i + 1) % 20 == 0:
-                logger.info(f"Checkpoint at chunk {i + 1}: clearing model cache and CUDA memory")
-                if self.engine is not None and hasattr(self.engine, "model") and self.engine.model is not None:
+                logger.info(
+                    f"Checkpoint at chunk {i + 1}: clearing model cache and CUDA memory"
+                )
+                if (
+                    self.engine is not None
+                    and hasattr(self.engine, "model")
+                    and self.engine.model is not None
+                ):
                     if hasattr(self.engine.model, "reset_cache"):
                         try:
                             self.engine.model.reset_cache()
@@ -596,4 +649,3 @@ class TTSEngine:
                     torch.cuda.synchronize()
 
         return wav_paths
-

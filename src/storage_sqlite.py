@@ -14,6 +14,7 @@
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 """SQLite-based storage backend for chunk metadata and segments."""
+
 import json
 import logging
 import sqlite3
@@ -159,12 +160,9 @@ class SqliteStorage(StorageBackend):
         """Return all chunks ordered by chunk_id."""
         conn = self._get_conn()
         try:
-            cursor = conn.execute(
-                "SELECT chunk_id, data FROM chunks ORDER BY chunk_id"
-            )
+            cursor = conn.execute("SELECT chunk_id, data FROM chunks ORDER BY chunk_id")
             return [
-                {**json.loads(row[1]), "chunk_id": row[0]}
-                for row in cursor.fetchall()
+                {**json.loads(row[1]), "chunk_id": row[0]} for row in cursor.fetchall()
             ]
         except Exception as e:
             logger.error(f"Failed to list chunks: {e}")
@@ -200,4 +198,3 @@ class SqliteStorage(StorageBackend):
         if self._conn is not None:
             self._conn.close()
             self._conn = None
-

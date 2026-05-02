@@ -15,17 +15,19 @@
 
 import logging
 from pathlib import Path
+from typing import Any
 
 try:
-    import soundfile as sf
     import numpy as np
+    import soundfile as sf
     from scipy import signal
 except ImportError:
-    sf = None
-    np = None
-    signal = None
+    sf: Any = None  # type: ignore[no-redef]
+    np: Any = None  # type: ignore[no-redef]
+    signal: Any = None  # type: ignore[no-redef]
 
 logger = logging.getLogger(__name__)
+
 
 def denoise(wav_path: Path):
     if sf is None or signal is None:
@@ -39,12 +41,12 @@ def denoise(wav_path: Path):
         audio, sr = sf.read(wav_path)
 
         # Remove sub-bass rumble below 60 Hz
-        sos_hp = signal.butter(4, 60, 'hp', fs=sr, output='sos')
+        sos_hp = signal.butter(4, 60, "hp", fs=sr, output="sos")
         audio = signal.sosfilt(sos_hp, audio)
 
         # Gentle high-frequency roll-off to reduce harshness / metallic TTS artifacts
         cutoff = min(9000, sr // 2 - 500)
-        sos_lp = signal.butter(2, cutoff, 'lp', fs=sr, output='sos')
+        sos_lp = signal.butter(2, cutoff, "lp", fs=sr, output="sos")
         audio = signal.sosfilt(sos_lp, audio)
 
         sf.write(wav_path, audio, sr)
@@ -53,4 +55,3 @@ def denoise(wav_path: Path):
     except Exception as e:
         logger.error(f"Audio post-processing failed for {wav_path}: {e}")
         raise
-

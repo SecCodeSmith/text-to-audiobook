@@ -19,10 +19,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from src import logging_setup
-from src import gui
+from src import gui, logging_setup  # noqa: E402
 
 if __name__ == "__main__":
     logging_setup.bootstrap()
     gui.launch()
-

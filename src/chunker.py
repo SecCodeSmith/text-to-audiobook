@@ -16,18 +16,22 @@
 import re
 from dataclasses import dataclass
 
+
 @dataclass
 class Chunk:
     text: str
     ends_paragraph: bool
     source_file: str = "default"
 
-def split_to_chunks(text: str, max_words: int = 499, source_file: str = "default") -> list[Chunk]:
+
+def split_to_chunks(
+    text: str, max_words: int = 499, source_file: str = "default"
+) -> list[Chunk]:
     sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z"\'])', text)
     sentences = [s.strip() for s in sentences if s.strip()]
 
     chunks = []
-    current_chunk = []
+    current_chunk: list[str] = []
     current_words = 0
 
     for i, sentence in enumerate(sentences):
@@ -44,20 +48,23 @@ def split_to_chunks(text: str, max_words: int = 499, source_file: str = "default
     if current_chunk:
         chunks.append((current_chunk, False))
 
-    paragraphs = text.split('\n\n')
+    paragraphs = text.split("\n\n")
     para_texts = [p.strip() for p in paragraphs if p.strip()]
 
     result = []
     for chunk_text_list, _ in chunks:
-        chunk_text = ' '.join(chunk_text_list)
+        chunk_text = " ".join(chunk_text_list)
         ends_para = False
 
         for para in para_texts:
-            if chunk_text.rstrip() == para.rstrip() or para.endswith(chunk_text.split()[-1] if chunk_text.split() else ''):
+            if chunk_text.rstrip() == para.rstrip() or para.endswith(
+                chunk_text.split()[-1] if chunk_text.split() else ""
+            ):
                 ends_para = True
                 break
 
-        result.append(Chunk(text=chunk_text, ends_paragraph=ends_para, source_file=source_file))
+        result.append(
+            Chunk(text=chunk_text, ends_paragraph=ends_para, source_file=source_file)
+        )
 
     return result
-

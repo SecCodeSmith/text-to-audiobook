@@ -20,26 +20,27 @@ import shutil
 import threading
 import time
 from pathlib import Path
+from typing import Any
 
 try:
-    import customtkinter as ctk
     import tkinter as tk
     from tkinter import filedialog
-except ImportError:
-    ctk = None
-    tk = None
-    filedialog = None
 
+    import customtkinter as ctk
+except ImportError:
+    ctk: Any = None  # type: ignore[no-redef]
+    tk: Any = None  # type: ignore[no-redef]
+    filedialog: Any = None  # type: ignore[no-redef]
+
+from . import config, logging_setup
 from .pipeline import (
-    prepare_segments,
-    generate_audio,
-    discover_projects,
-    load_cached_segments,
-    cleanup_noisy_chunks,
     assemble_final,
+    cleanup_noisy_chunks,
+    discover_projects,
+    generate_audio,
+    load_cached_segments,
+    prepare_segments,
 )
-from . import config
-from . import logging_setup
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _async_raise(tid: int, exctype: type) -> None:
     """Raise an exception in the target thread by its native thread ID."""
@@ -63,6 +65,7 @@ def _async_raise(tid: int, exctype: type) -> None:
 # ---------------------------------------------------------------------------
 # Collapsible frame widget
 # ---------------------------------------------------------------------------
+
 
 class CollapsibleFrame(ctk.CTkFrame):
     """A frame whose content can be shown/hidden via an arrow-button header."""
@@ -125,6 +128,7 @@ class CollapsibleFrame(ctk.CTkFrame):
 # Settings popup
 # ---------------------------------------------------------------------------
 
+
 class SettingsWindow(ctk.CTkToplevel):
     def __init__(self, parent):
         super().__init__(parent)
@@ -165,38 +169,84 @@ class SettingsWindow(ctk.CTkToplevel):
             return getattr(config, key, config.get_default(key))
 
         _section("Text Processing")
-        _row(frame, "MAX_WORDS_PER_CHUNK", "Max words per chunk", _cur("MAX_WORDS_PER_CHUNK"))
+        _row(
+            frame,
+            "MAX_WORDS_PER_CHUNK",
+            "Max words per chunk",
+            _cur("MAX_WORDS_PER_CHUNK"),
+        )
 
         _section("LLM")
-        _row(frame, "LLM_MAX_RETRIES", "LLM retry attempts (per call)", _cur("LLM_MAX_RETRIES"))
+        _row(
+            frame,
+            "LLM_MAX_RETRIES",
+            "LLM retry attempts (per call)",
+            _cur("LLM_MAX_RETRIES"),
+        )
 
         _section("Storage")
-        _row(frame, "STORAGE_BACKEND", "Storage backend", _cur("STORAGE_BACKEND"), entry_type="choice", choices=["json", "sqlite"])
+        _row(
+            frame,
+            "STORAGE_BACKEND",
+            "Storage backend",
+            _cur("STORAGE_BACKEND"),
+            entry_type="choice",
+            choices=["json", "sqlite"],
+        )
 
         _section("TTS")
         _row(frame, "TTS_MAX_TOKENS", "Max tokens per chunk", _cur("TTS_MAX_TOKENS"))
-        _row(frame, "TTS_MAX_WORDS_FALLBACK", "Max words per chunk (no tokenizer)", _cur("TTS_MAX_WORDS_FALLBACK"))
+        _row(
+            frame,
+            "TTS_MAX_WORDS_FALLBACK",
+            "Max words per chunk (no tokenizer)",
+            _cur("TTS_MAX_WORDS_FALLBACK"),
+        )
 
         _section("Audio")
         _row(frame, "VOICE_SEED", "Voice seed (RNG)", _cur("VOICE_SEED"))
         _row(frame, "SAMPLE_RATE", "Sample rate (Hz)", _cur("SAMPLE_RATE"))
         _row(frame, "CROSSFADE_MS", "Crossfade (ms)", _cur("CROSSFADE_MS"))
-        _row(frame, "SILENCE_AFTER_PERIOD_MS", "Silence after sentence (ms)",
-             _cur("SILENCE_AFTER_PERIOD_MS"))
-        _row(frame, "SILENCE_AFTER_PARAGRAPH_MS", "Silence after paragraph (ms)",
-             _cur("SILENCE_AFTER_PARAGRAPH_MS"))
+        _row(
+            frame,
+            "SILENCE_AFTER_PERIOD_MS",
+            "Silence after sentence (ms)",
+            _cur("SILENCE_AFTER_PERIOD_MS"),
+        )
+        _row(
+            frame,
+            "SILENCE_AFTER_PARAGRAPH_MS",
+            "Silence after paragraph (ms)",
+            _cur("SILENCE_AFTER_PARAGRAPH_MS"),
+        )
 
         _section("Output Format")
         chapter_var = ctk.StringVar(value=str(_cur("CHAPTER_BY_CHAPTER")).lower())
         self._fields["CHAPTER_BY_CHAPTER"] = chapter_var
-        _row(frame, "CHAPTER_BY_CHAPTER", "Chapter-by-chapter files", _cur("CHAPTER_BY_CHAPTER"),
-             entry_type="choice", choices=["true", "false"])
+        _row(
+            frame,
+            "CHAPTER_BY_CHAPTER",
+            "Chapter-by-chapter files",
+            _cur("CHAPTER_BY_CHAPTER"),
+            entry_type="choice",
+            choices=["true", "false"],
+        )
 
         _section("Logging")
-        _row(frame, "LOG_LEVEL_CONSOLE", "Console log level",
-             _cur("LOG_LEVEL_CONSOLE"), entry_type="choice")
-        _row(frame, "LOG_LEVEL_FILE", "File log level",
-             _cur("LOG_LEVEL_FILE"), entry_type="choice")
+        _row(
+            frame,
+            "LOG_LEVEL_CONSOLE",
+            "Console log level",
+            _cur("LOG_LEVEL_CONSOLE"),
+            entry_type="choice",
+        )
+        _row(
+            frame,
+            "LOG_LEVEL_FILE",
+            "File log level",
+            _cur("LOG_LEVEL_FILE"),
+            entry_type="choice",
+        )
 
         # Buttons
         btn_row = ctk.CTkFrame(self, fg_color="transparent")
@@ -204,19 +254,32 @@ class SettingsWindow(ctk.CTkToplevel):
         ctk.CTkButton(btn_row, text="Apply & Save", command=self._apply).pack(
             side="left", padx=(0, 8)
         )
-        ctk.CTkButton(btn_row, text="Reset to Defaults",
-                      command=self._reset_to_defaults,
-                      fg_color="#5a3280", hover_color="#3d2258").pack(
-            side="left", padx=(0, 8)
-        )
-        ctk.CTkButton(btn_row, text="Cancel", command=self.destroy,
-                      fg_color="gray40", hover_color="gray30").pack(side="left")
+        ctk.CTkButton(
+            btn_row,
+            text="Reset to Defaults",
+            command=self._reset_to_defaults,
+            fg_color="#5a3280",
+            hover_color="#3d2258",
+        ).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(
+            btn_row,
+            text="Cancel",
+            command=self.destroy,
+            fg_color="gray40",
+            hover_color="gray30",
+        ).pack(side="left")
 
     def _apply(self):
         int_keys = {
-            "MAX_WORDS_PER_CHUNK", "VOICE_SEED", "SAMPLE_RATE",
-            "CROSSFADE_MS", "SILENCE_AFTER_PERIOD_MS", "SILENCE_AFTER_PARAGRAPH_MS",
-            "LLM_MAX_RETRIES", "TTS_MAX_TOKENS", "TTS_MAX_WORDS_FALLBACK",
+            "MAX_WORDS_PER_CHUNK",
+            "VOICE_SEED",
+            "SAMPLE_RATE",
+            "CROSSFADE_MS",
+            "SILENCE_AFTER_PERIOD_MS",
+            "SILENCE_AFTER_PARAGRAPH_MS",
+            "LLM_MAX_RETRIES",
+            "TTS_MAX_TOKENS",
+            "TTS_MAX_WORDS_FALLBACK",
         }
         bool_keys = {"CHAPTER_BY_CHAPTER"}
         settings = {}
@@ -226,7 +289,9 @@ class SettingsWindow(ctk.CTkToplevel):
                 try:
                     val = int(raw)
                 except ValueError:
-                    logger.warning(f"Settings: invalid integer for {key}: {raw!r} — skipped")
+                    logger.warning(
+                        f"Settings: invalid integer for {key}: {raw!r} — skipped"
+                    )
                     continue
             elif key in bool_keys:
                 val = raw.lower() in ("true", "1", "yes")
@@ -266,6 +331,7 @@ class SettingsWindow(ctk.CTkToplevel):
 # Close-confirmation dialog
 # ---------------------------------------------------------------------------
 
+
 class _ConfirmDialog(ctk.CTkToplevel):
     def __init__(self, parent, message: str):
         super().__init__(parent)
@@ -278,8 +344,13 @@ class _ConfirmDialog(ctk.CTkToplevel):
         ctk.CTkLabel(self, text=message, wraplength=320).pack(pady=20, padx=16)
         row = ctk.CTkFrame(self, fg_color="transparent")
         row.pack()
-        ctk.CTkButton(row, text="Quit Anyway", fg_color="#a83232",
-                      hover_color="#7a2424", command=self._yes).pack(side="left", padx=8)
+        ctk.CTkButton(
+            row,
+            text="Quit Anyway",
+            fg_color="#a83232",
+            hover_color="#7a2424",
+            command=self._yes,
+        ).pack(side="left", padx=8)
         ctk.CTkButton(row, text="Cancel", command=self._no).pack(side="left", padx=8)
         self.protocol("WM_DELETE_WINDOW", self._no)
 
@@ -295,6 +366,7 @@ class _ConfirmDialog(ctk.CTkToplevel):
 # ---------------------------------------------------------------------------
 # Main application
 # ---------------------------------------------------------------------------
+
 
 class TTSApp:
     def __init__(self, root):
@@ -323,14 +395,14 @@ class TTSApp:
         frame.pack(padx=20, pady=20, fill="both", expand=True)
 
         frame.columnconfigure(0, weight=1)
-        frame.rowconfigure(0, weight=0)   # title
-        frame.rowconfigure(1, weight=0)   # input dir
-        frame.rowconfigure(2, weight=0)   # output dir
+        frame.rowconfigure(0, weight=0)  # title
+        frame.rowconfigure(1, weight=0)  # input dir
+        frame.rowconfigure(2, weight=0)  # output dir
         frame.rowconfigure(3, weight=30)  # middle section (stories + right panels)
-        frame.rowconfigure(4, weight=0)   # row A: 4 numbered stage buttons
-        frame.rowconfigure(5, weight=0)   # row B: control buttons
-        frame.rowconfigure(7, weight=0)   # progress row
-        frame.rowconfigure(8, weight=0)   # log label
+        frame.rowconfigure(4, weight=0)  # row A: 4 numbered stage buttons
+        frame.rowconfigure(5, weight=0)  # row B: control buttons
+        frame.rowconfigure(7, weight=0)  # progress row
+        frame.rowconfigure(8, weight=0)  # log label
         frame.rowconfigure(9, weight=70)  # log textbox
 
         _PAD = {"padx": 5, "pady": 4}
@@ -344,21 +416,25 @@ class TTSApp:
         input_frame = ctk.CTkFrame(frame)
         input_frame.grid(row=1, column=0, sticky="ew", **_PAD)
         ctk.CTkLabel(input_frame, text="Input Directory:").pack(side="left", padx=5)
-        self.input_path = ctk.CTkLabel(input_frame, text=str(config.INPUT_DIR),
-                                       text_color="gray")
+        self.input_path = ctk.CTkLabel(
+            input_frame, text=str(config.INPUT_DIR), text_color="gray"
+        )
         self.input_path.pack(side="left", padx=5)
-        ctk.CTkButton(input_frame, text="Browse", command=self.select_input_dir,
-                      width=100).pack(side="right", padx=5)
+        ctk.CTkButton(
+            input_frame, text="Browse", command=self.select_input_dir, width=100
+        ).pack(side="right", padx=5)
 
         # ── Row 2: output directory ────────────────────────────────────────
         output_frame = ctk.CTkFrame(frame)
         output_frame.grid(row=2, column=0, sticky="ew", **_PAD)
         ctk.CTkLabel(output_frame, text="Output Directory:").pack(side="left", padx=5)
-        self.output_path = ctk.CTkLabel(output_frame, text=str(config.OUTPUT_DIR),
-                                        text_color="gray")
+        self.output_path = ctk.CTkLabel(
+            output_frame, text=str(config.OUTPUT_DIR), text_color="gray"
+        )
         self.output_path.pack(side="left", padx=5)
-        ctk.CTkButton(output_frame, text="Browse", command=self.select_output_dir,
-                      width=100).pack(side="right", padx=5)
+        ctk.CTkButton(
+            output_frame, text="Browse", command=self.select_output_dir, width=100
+        ).pack(side="right", padx=5)
 
         # ── Row 3: two-column middle section ───────────────────────────────
         middle = ctk.CTkFrame(frame, fg_color="transparent")
@@ -379,16 +455,22 @@ class TTSApp:
 
         select_row = ctk.CTkFrame(projects_outer, fg_color="transparent")
         select_row.grid(row=1, column=0, sticky="ew", padx=5, pady=2)
-        ctk.CTkButton(select_row, text="Select All",
-                      command=self._select_all_projects, width=90).pack(side="left", padx=2)
-        ctk.CTkButton(select_row, text="Select None",
-                      command=self._select_no_projects, width=90).pack(side="left", padx=2)
-        ctk.CTkButton(select_row, text="Refresh",
-                      command=self._refresh_project_list, width=80).pack(side="left", padx=2)
+        ctk.CTkButton(
+            select_row, text="Select All", command=self._select_all_projects, width=90
+        ).pack(side="left", padx=2)
+        ctk.CTkButton(
+            select_row, text="Select None", command=self._select_no_projects, width=90
+        ).pack(side="left", padx=2)
+        ctk.CTkButton(
+            select_row, text="Refresh", command=self._refresh_project_list, width=80
+        ).pack(side="left", padx=2)
         self._fix_lang_btn = ctk.CTkButton(
-            select_row, text="Fix Languages",
+            select_row,
+            text="Fix Languages",
             command=self._fix_languages,
-            width=110, fg_color="#2a6a2a", hover_color="#1e4e1e",
+            width=110,
+            fg_color="#2a6a2a",
+            hover_color="#1e4e1e",
         )
         self._fix_lang_btn.pack(side="right", padx=2)
 
@@ -405,27 +487,41 @@ class TTSApp:
         right_col.rowconfigure(2, weight=1)  # spacer
 
         # Panel 2: Voice Description
-        self._voice_panel = CollapsibleFrame(right_col, "Voice Description",
-                                             start_expanded=False)
+        self._voice_panel = CollapsibleFrame(
+            right_col, "Voice Description", start_expanded=False
+        )
         self._voice_panel.grid(row=0, column=0, sticky="ew", pady=(0, 4))
 
         def _make_reset_btn(parent):
-            return ctk.CTkButton(parent, text="Reset Default", width=110,
-                                 command=self._reset_voice_prompt)
+            return ctk.CTkButton(
+                parent,
+                text="Reset Default",
+                width=110,
+                command=self._reset_voice_prompt,
+            )
+
         self._voice_panel.add_header_widget(_make_reset_btn)
 
         def _make_regen_ref_btn(parent):
-            return ctk.CTkButton(parent, text="Regen Voice Ref", width=120,
-                                 command=self._regen_voice_reference)
+            return ctk.CTkButton(
+                parent,
+                text="Regen Voice Ref",
+                width=120,
+                command=self._regen_voice_reference,
+            )
+
         self._voice_panel.add_header_widget(_make_regen_ref_btn)
 
-        self.voice_prompt = ctk.CTkTextbox(self._voice_panel.content, wrap="word", height=120)
+        self.voice_prompt = ctk.CTkTextbox(
+            self._voice_panel.content, wrap="word", height=120
+        )
         self.voice_prompt.pack(fill="both", expand=True, padx=4, pady=4)
         self.voice_prompt.insert("1.0", config.NARRATOR_PROMPT)
 
         # Panel 3: Quick Config
-        self._config_panel = CollapsibleFrame(right_col, "Quick Config",
-                                              start_expanded=False)
+        self._config_panel = CollapsibleFrame(
+            right_col, "Quick Config", start_expanded=False
+        )
         self._config_panel.grid(row=1, column=0, sticky="ew")
 
         self._quick_config_vars: dict[str, tk.StringVar] = {}
@@ -447,8 +543,10 @@ class TTSApp:
             entry.pack(side="right")
 
         apply_btn = ctk.CTkButton(
-            self._config_panel.content, text="Apply Config",
-            command=self._apply_quick_config, width=120,
+            self._config_panel.content,
+            text="Apply Config",
+            command=self._apply_quick_config,
+            width=120,
         )
         apply_btn.pack(anchor="e", padx=4, pady=(4, 4))
 
@@ -457,28 +555,39 @@ class TTSApp:
         stages_frame.grid(row=4, column=0, sticky="ew", **_PAD)
 
         self.start_btn = ctk.CTkButton(
-            stages_frame, text="1. Prepare Segments",
-            command=self.start_stage1, font=("Arial", 13),
+            stages_frame,
+            text="1. Prepare Segments",
+            command=self.start_stage1,
+            font=("Arial", 13),
         )
         self.start_btn.pack(side="left", expand=True, fill="x", padx=2, pady=4)
 
         self.confirm_btn = ctk.CTkButton(
-            stages_frame, text="2. Generate Audio",
-            command=self.start_stage2, font=("Arial", 13), state="disabled",
+            stages_frame,
+            text="2. Generate Audio",
+            command=self.start_stage2,
+            font=("Arial", 13),
+            state="disabled",
         )
         self.confirm_btn.pack(side="left", expand=True, fill="x", padx=2, pady=4)
 
         self._cleanup_btn = ctk.CTkButton(
-            stages_frame, text="3. Cleanup Noisy",
-            command=self.start_cleanup, font=("Arial", 13),
-            fg_color="#2a5a8a", hover_color="#1e3f60",
+            stages_frame,
+            text="3. Cleanup Noisy",
+            command=self.start_cleanup,
+            font=("Arial", 13),
+            fg_color="#2a5a8a",
+            hover_color="#1e3f60",
         )
         self._cleanup_btn.pack(side="left", expand=True, fill="x", padx=2, pady=4)
 
         self._assemble_btn = ctk.CTkButton(
-            stages_frame, text="4. Assemble Final",
-            command=self.start_assemble_final, font=("Arial", 13),
-            fg_color="#2a6a2a", hover_color="#1e4e1e",
+            stages_frame,
+            text="4. Assemble Final",
+            command=self.start_assemble_final,
+            font=("Arial", 13),
+            fg_color="#2a6a2a",
+            hover_color="#1e4e1e",
         )
         self._assemble_btn.pack(side="left", expand=True, fill="x", padx=2, pady=4)
 
@@ -488,46 +597,74 @@ class TTSApp:
 
         self._chapter_mode_var = tk.BooleanVar(value=config.CHAPTER_BY_CHAPTER)
         self._chapter_mode_cb = ctk.CTkCheckBox(
-            control_frame, text="Chapter-by-chapter",
+            control_frame,
+            text="Chapter-by-chapter",
             variable=self._chapter_mode_var,
             command=self._toggle_chapter_mode,
         )
         self._chapter_mode_cb.pack(side="left", padx=4, pady=4)
 
         self.stop_btn = ctk.CTkButton(
-            control_frame, text="Stop", command=self._request_stop,
-            fg_color="#a87832", hover_color="#7a5a24", width=80, state="disabled",
+            control_frame,
+            text="Stop",
+            command=self._request_stop,
+            fg_color="#a87832",
+            hover_color="#7a5a24",
+            width=80,
+            state="disabled",
         )
         self.stop_btn.pack(side="left", padx=4, pady=4)
 
         self.force_stop_btn = ctk.CTkButton(
-            control_frame, text="Force Stop", command=self._force_stop,
-            fg_color="#a83232", hover_color="#7a2424", width=95, state="disabled",
+            control_frame,
+            text="Force Stop",
+            command=self._force_stop,
+            fg_color="#a83232",
+            hover_color="#7a2424",
+            width=95,
+            state="disabled",
         )
         self.force_stop_btn.pack(side="left", padx=4, pady=4)
 
         self.clear_cache_btn = ctk.CTkButton(
-            control_frame, text="Clear Cache", command=self.clear_cache,
-            fg_color="#a83232", hover_color="#7a2424", width=110,
+            control_frame,
+            text="Clear Cache",
+            command=self.clear_cache,
+            fg_color="#a83232",
+            hover_color="#7a2424",
+            width=110,
         )
         self.clear_cache_btn.pack(side="right", padx=4, pady=4)
 
         self.clean_output_btn = ctk.CTkButton(
-            control_frame, text="Clean Output", command=self.clean_output,
-            fg_color="#5a3280", hover_color="#3d2258", width=115,
+            control_frame,
+            text="Clean Output",
+            command=self.clean_output,
+            fg_color="#5a3280",
+            hover_color="#3d2258",
+            width=115,
         )
         self.clean_output_btn.pack(side="right", padx=4, pady=4)
 
         ctk.CTkButton(
-            control_frame, text="⚙ Settings", command=self._open_settings, width=95,
+            control_frame,
+            text="⚙ Settings",
+            command=self._open_settings,
+            width=95,
         ).pack(side="right", padx=4, pady=4)
 
         ctk.CTkButton(
-            control_frame, text="💾 Save Log", command=self._save_log, width=95,
+            control_frame,
+            text="💾 Save Log",
+            command=self._save_log,
+            width=95,
         ).pack(side="right", padx=4, pady=4)
 
         ctk.CTkButton(
-            control_frame, text="📂 Logs", command=self._open_logs_folder, width=80,
+            control_frame,
+            text="📂 Logs",
+            command=self._open_logs_folder,
+            width=80,
         ).pack(side="right", padx=4, pady=4)
 
         # ── Row 7: progress row ────────────────────────────────────────────
@@ -539,7 +676,9 @@ class TTSApp:
         self.progress.grid(row=0, column=0, sticky="ew", padx=(0, 8))
         self.progress.set(0)
 
-        self._progress_label = ctk.CTkLabel(progress_row, text="", width=180, anchor="w")
+        self._progress_label = ctk.CTkLabel(
+            progress_row, text="", width=180, anchor="w"
+        )
         self._progress_label.grid(row=0, column=1, sticky="w")
 
         # ── Row 8: log label ───────────────────────────────────────────────
@@ -634,8 +773,9 @@ class TTSApp:
         else:
             header += "All chunks passed discriminator + volume + voice-match checks.\n"
 
-        ctk.CTkLabel(win, text=header, justify="left", anchor="w",
-                     font=("Arial", 12)).pack(fill="x", padx=12, pady=(12, 4))
+        ctk.CTkLabel(
+            win, text=header, justify="left", anchor="w", font=("Arial", 12)
+        ).pack(fill="x", padx=12, pady=(12, 4))
 
         body = ctk.CTkTextbox(win, wrap="none")
         body.pack(fill="both", expand=True, padx=12, pady=(0, 8))
@@ -644,7 +784,9 @@ class TTSApp:
         for project_name, r in results.items():
             deleted = r.get("deleted", [])
             edited = r.get("edited", 0)
-            lines.append(f"── {project_name} — cleaned {edited}, deleted {len(deleted)} ──")
+            lines.append(
+                f"── {project_name} — cleaned {edited}, deleted {len(deleted)} ──"
+            )
             if deleted:
                 for fname, reason in deleted:
                     lines.append(f"  ✗ {fname}    {reason}")
@@ -655,7 +797,9 @@ class TTSApp:
         body.insert("1.0", "\n".join(lines) if lines else "No projects scanned.")
         body.configure(state="disabled")
 
-        ctk.CTkButton(win, text="Close", command=win.destroy, width=100).pack(pady=(0, 12))
+        ctk.CTkButton(win, text="Close", command=win.destroy, width=100).pack(
+            pady=(0, 12)
+        )
 
     # -----------------------------------------------------------------------
     # Settings & config
@@ -666,8 +810,11 @@ class TTSApp:
 
     def _apply_quick_config(self):
         int_keys = {
-            "MAX_WORDS_PER_CHUNK", "VOICE_SEED", "CROSSFADE_MS",
-            "SILENCE_AFTER_PERIOD_MS", "SILENCE_AFTER_PARAGRAPH_MS",
+            "MAX_WORDS_PER_CHUNK",
+            "VOICE_SEED",
+            "CROSSFADE_MS",
+            "SILENCE_AFTER_PERIOD_MS",
+            "SILENCE_AFTER_PARAGRAPH_MS",
             "TTS_MAX_TOKENS",
         }
         settings = {}
@@ -840,7 +987,9 @@ class TTSApp:
 
     def _regen_voice_reference(self):
         from pathlib import Path
+
         from .tts_engine import TTSEngine
+
         narrator_prompt = self._get_voice_prompt()
         ref_path = Path(config.VOICE_REF_PATH)
         self._set_busy(True)
@@ -854,7 +1003,9 @@ class TTSApp:
                 engine = TTSEngine()
                 engine._generate_voice_reference(ref_path, narrator_prompt)
                 self._set_progress(1.0)
-                logger.info(f"Voice reference saved to {ref_path}. Delete existing chunks and re-run Stage 2 to apply.")
+                logger.info(
+                    f"Voice reference saved to {ref_path}. Delete existing chunks and re-run Stage 2 to apply."
+                )
             except Exception as e:
                 logger.exception(f"Voice reference generation failed: {e}")
             finally:
@@ -932,12 +1083,15 @@ class TTSApp:
 
         def work():
             try:
+
                 def progress_cb(msg):
                     cur = self.progress.get()
                     self._set_progress(min(cur + 0.02, 0.95))
 
                 segments = prepare_segments(
-                    self.input_dir, self.output_dir, progress_cb,
+                    self.input_dir,
+                    self.output_dir,
+                    progress_cb,
                     stop_event=self._stop_event,
                     selected_names=selected,
                 )
@@ -979,7 +1133,9 @@ class TTSApp:
             logger.warning("No segments to generate; run Stage 1 first.")
             return
         selected = set(self._selected_project_names())
-        to_process = {n: s for n, s in self.segments.items() if not selected or n in selected}
+        to_process = {
+            n: s for n, s in self.segments.items() if not selected or n in selected
+        }
         if not to_process:
             logger.warning("No selected projects have cached segments to synthesize.")
             return
@@ -1011,7 +1167,9 @@ class TTSApp:
                     self._update_progress_label(done_count[0], total_chunks)
 
                 generate_audio(
-                    to_process, self.output_dir, None,
+                    to_process,
+                    self.output_dir,
+                    None,
                     stop_event=self._stop_event,
                     narrator_prompt=narrator_prompt,
                     chunk_done_cb=on_chunk_done,
@@ -1050,10 +1208,13 @@ class TTSApp:
         self.progress.set(0)
         self._progress_label.configure(text="")
         self._set_busy(True)
-        logger.info(f"Stage 3 (Cleanup): scanning {len(selected)} project(s) for noisy chunks...")
+        logger.info(
+            f"Stage 3 (Cleanup): scanning {len(selected)} project(s) for noisy chunks..."
+        )
 
         def work():
             try:
+
                 def progress_cb(msg):
                     cur = self.progress.get()
                     self._set_progress(min(cur + 0.05, 0.95))
@@ -1072,7 +1233,9 @@ class TTSApp:
                         "Re-run Stage 2 to re-synthesize the deleted chunks, then Stage 4 to assemble."
                     )
                 else:
-                    logger.info(f"Cleanup done: {total_edited} chunk(s) cleaned, none deleted.")
+                    logger.info(
+                        f"Cleanup done: {total_edited} chunk(s) cleaned, none deleted."
+                    )
                 self._set_progress(1.0)
                 self.root.after(0, lambda: self._show_cleanup_report(results))
             except Exception as e:
@@ -1093,7 +1256,9 @@ class TTSApp:
             logger.warning("No segments loaded; run Stage 1 first.")
             return
         selected = set(self._selected_project_names())
-        to_process = {n: s for n, s in self.segments.items() if not selected or n in selected}
+        to_process = {
+            n: s for n, s in self.segments.items() if not selected or n in selected
+        }
         if not to_process:
             logger.warning("No selected projects have cached segments.")
             return
@@ -1101,16 +1266,21 @@ class TTSApp:
         self.progress.set(0)
         self._progress_label.configure(text="")
         self._set_busy(True)
-        logger.info(f"Stage 4 (Assemble Final): assembling {len(to_process)} project(s)...")
+        logger.info(
+            f"Stage 4 (Assemble Final): assembling {len(to_process)} project(s)..."
+        )
 
         def work():
             try:
+
                 def progress_cb(msg):
                     cur = self.progress.get()
                     self._set_progress(min(cur + 0.05, 0.95))
 
                 assemble_final(
-                    to_process, self.output_dir, progress_cb,
+                    to_process,
+                    self.output_dir,
+                    progress_cb,
                     stop_event=self._stop_event,
                 )
                 self._set_progress(1.0)
@@ -1196,7 +1366,9 @@ class TTSApp:
 
         def work():
             from collections import Counter
+
             from .storage_factory import create_storage
+
             try:
                 from .llm_normalizer import LLMNormalizer
             except Exception as e:
@@ -1230,7 +1402,8 @@ class TTSApp:
                     langs = [d.get("language", "english") for d in segments_data]
                     majority_lang = Counter(langs).most_common(1)[0][0]
                     outliers = [
-                        (i, d) for i, d in enumerate(segments_data)
+                        (i, d)
+                        for i, d in enumerate(segments_data)
                         if d.get("language", "english") != majority_lang
                     ]
 
@@ -1283,4 +1456,3 @@ def launch():
     root = ctk.CTk()
     TTSApp(root)
     root.mainloop()
-

@@ -190,4 +190,3 @@ def test_process_all_defaults_language_when_missing(fake_wrapper_cls, tmp_path):
     _, wrapper = fake_wrapper_cls
     call = wrapper.generate_voice_clone.call_args_list[0]
     assert call.kwargs["language"] == TTSEngine.DEFAULT_LANGUAGE
-

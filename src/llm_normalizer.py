@@ -13,15 +13,19 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import gc
 import json
 import logging
-import gc
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 if sys.platform == "win32":
-    cuda_path = os.environ.get("CUDA_PATH") or r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.4"
+    cuda_path = (
+        os.environ.get("CUDA_PATH")
+        or r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.4"
+    )
     cuda_bin = Path(cuda_path) / "bin"
     if cuda_bin.is_dir():
         os.environ["PATH"] = str(cuda_bin) + os.pathsep + os.environ.get("PATH", "")
@@ -29,13 +33,13 @@ if sys.platform == "win32":
             os.add_dll_directory(str(cuda_bin))
 
 try:
-    import torch
     import llama_cpp
+    import torch
     from huggingface_hub import hf_hub_download
 except ImportError:
-    torch = None
-    llama_cpp = None
-    hf_hub_download = None
+    torch: Any = None  # type: ignore[no-redef]
+    llama_cpp: Any = None  # type: ignore[no-redef]
+    hf_hub_download: Any = None  # type: ignore[no-redef]
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +60,9 @@ class LLMNormalizer:
         model_path.parent.mkdir(parents=True, exist_ok=True)
         hf_token = os.environ.get("HF_TOKEN")
         if not hf_token:
-            logger.warning("HF_TOKEN not set in environment; download may fail for private models")
+            logger.warning(
+                "HF_TOKEN not set in environment; download may fail for private models"
+            )
 
         logger.info("Downloading Llama model from HuggingFace...")
         cache_path = hf_hub_download(
@@ -130,7 +136,7 @@ class LLMNormalizer:
                     depth -= 1
                     if depth == 0:
                         try:
-                            return json.loads(text[start:i + 1])
+                            return json.loads(text[start : i + 1])
                         except json.JSONDecodeError:
                             break
             start = text.find(opener, start + 1)
@@ -144,12 +150,30 @@ class LLMNormalizer:
     # Step A: emotion analysis
     # ------------------------------------------------------------------
 
-    EMOTIONS = ["neutral", "happy", "sad", "angry", "fearful", "surprised", "calm", "tense", "melancholic"]
+    EMOTIONS = [
+        "neutral",
+        "happy",
+        "sad",
+        "angry",
+        "fearful",
+        "surprised",
+        "calm",
+        "tense",
+        "melancholic",
+    ]
 
     # Languages Qwen3-TTS-VoiceDesign accepts as the `language=` argument.
     SUPPORTED_LANGUAGES = [
-        "english", "chinese", "spanish", "french", "german",
-        "italian", "portuguese", "russian", "japanese", "korean",
+        "english",
+        "chinese",
+        "spanish",
+        "french",
+        "german",
+        "italian",
+        "portuguese",
+        "russian",
+        "japanese",
+        "korean",
     ]
     DEFAULT_LANGUAGE = "english"
 
@@ -162,15 +186,15 @@ class LLMNormalizer:
         latin = cyrillic = hiragana_katakana = hangul = han = 0
         for ch in text:
             cp = ord(ch)
-            if 0x0041 <= cp <= 0x024F:        # Latin (basic + extended)
+            if 0x0041 <= cp <= 0x024F:  # Latin (basic + extended)
                 latin += 1
-            elif 0x0400 <= cp <= 0x04FF:      # Cyrillic
+            elif 0x0400 <= cp <= 0x04FF:  # Cyrillic
                 cyrillic += 1
-            elif 0x3040 <= cp <= 0x30FF:      # Hiragana + Katakana
+            elif 0x3040 <= cp <= 0x30FF:  # Hiragana + Katakana
                 hiragana_katakana += 1
-            elif 0xAC00 <= cp <= 0xD7AF:      # Hangul syllables
+            elif 0xAC00 <= cp <= 0xD7AF:  # Hangul syllables
                 hangul += 1
-            elif 0x4E00 <= cp <= 0x9FFF:      # CJK unified ideographs (Han)
+            elif 0x4E00 <= cp <= 0x9FFF:  # CJK unified ideographs (Han)
                 han += 1
 
         # Decide what scripts dominate.
@@ -184,8 +208,7 @@ class LLMNormalizer:
             return {"russian"}
         if latin > 20:
             # Pure Latin script — must be one of the Western languages.
-            return {"english", "spanish", "french", "german",
-                    "italian", "portuguese"}
+            return {"english", "spanish", "french", "german", "italian", "portuguese"}
         # Too short / mixed / unknown: trust the LLM.
         return set(LLMNormalizer.SUPPORTED_LANGUAGES)
 
@@ -254,13 +277,13 @@ class LLMNormalizer:
         Falls back to natsort on failure.
         """
         from natsort import natsorted
+
         names_in = [f["name"] for f in files]
         if self.llm is None or len(files) <= 1:
             return natsorted(names_in)
 
         listing = "\n".join(
-            f'- {f["name"]}: "{(f.get("preview") or "")[:200].strip()}"'
-            for f in files
+            f'- {f["name"]}: "{(f.get("preview") or "")[:200].strip()}"' for f in files
         )
         system_prompt = (
             "You are sorting book chapter files into correct reading order.\n"
@@ -277,7 +300,7 @@ class LLMNormalizer:
             '    - Chapter_Two.md: "The morning was cold..."\n'
             '    - Prologue.md: "Long before the war began..."\n'
             '    - Chapter_One.md: "She stepped off the train..."\n'
-            "  Output: [\"Prologue.md\", \"Chapter_One.md\", \"Chapter_Two.md\"]"
+            '  Output: ["Prologue.md", "Chapter_One.md", "Chapter_Two.md"]'
         )
         try:
             prompt = f"{system_prompt}\n\nInput:\n{listing}\n\nOutput:"
@@ -292,7 +315,9 @@ class LLMNormalizer:
             valid = [n for n in ordered if isinstance(n, str) and n in names_in]
             missing = [n for n in names_in if n not in valid]
             if missing:
-                logger.warning(f"LLM sort missed {len(missing)} files; appending in natsort order")
+                logger.warning(
+                    f"LLM sort missed {len(missing)} files; appending in natsort order"
+                )
                 valid.extend(natsorted(missing))
             if not valid:
                 raise ValueError("no valid file names returned")
@@ -312,6 +337,7 @@ class LLMNormalizer:
         # any prose — it cannot hallucinate text. Validation reduces to
         # checking integer ranges cover [1..N] without gaps or overlaps.
         import re as _re
+
         sentences = _re.split(r'(?<=[.!?])\s+(?=[A-Z"\'])', text)
         sentences = [s.strip() for s in sentences if s.strip()]
         n_sent = len(sentences)
@@ -357,7 +383,9 @@ class LLMNormalizer:
                 last_raw = output
                 segments = self._extract_json(output, opener="[", closer="]")
                 if not isinstance(segments, list) or not segments:
-                    raise ValueError(f"no segments parsed | raw[:200]={last_raw[:200]!r}")
+                    raise ValueError(
+                        f"no segments parsed | raw[:200]={last_raw[:200]!r}"
+                    )
 
                 # Sanity: cannot have more emotion spans than sentences. If the
                 # LLM returned more, it has hallucinated or split sentences it
@@ -376,12 +404,21 @@ class LLMNormalizer:
                         rejected.append(("not-a-dict", seg))
                         continue
                     try:
-                        start = int(seg.get("Start") if seg.get("Start") is not None else seg.get("start"))
-                        stop = int(seg.get("Stop") if seg.get("Stop") is not None else seg.get("stop"))
+                        raw_start = seg.get("Start") if seg.get("Start") is not None else seg.get("start")
+                        raw_stop = seg.get("Stop") if seg.get("Stop") is not None else seg.get("stop")
+                        if raw_start is None or raw_stop is None:
+                            rejected.append(("missing-range", seg))
+                            continue
+                        start = int(raw_start)
+                        stop = int(raw_stop)
                     except (TypeError, ValueError):
                         rejected.append(("non-int-range", seg))
                         continue
-                    emotion = str(seg.get("Emotion") or seg.get("emotion") or "neutral").strip().lower()
+                    emotion = (
+                        str(seg.get("Emotion") or seg.get("emotion") or "neutral")
+                        .strip()
+                        .lower()
+                    )
                     if emotion not in self.EMOTIONS:
                         emotion = "neutral"
                     if not (1 <= start <= stop <= n_sent):
@@ -413,7 +450,9 @@ class LLMNormalizer:
 
                 # Fill any gaps with neutral spans (these are the "dead spaces").
                 if gaps:
-                    logger.debug(f"  filling {len(gaps)} dead-space gap(s) with neutral: {gaps[:5]}")
+                    logger.debug(
+                        f"  filling {len(gaps)} dead-space gap(s) with neutral: {gaps[:5]}"
+                    )
                     for gs, ge in gaps:
                         spans.append((gs, ge, "neutral"))
                     spans.sort(key=lambda s: s[0])
@@ -421,7 +460,7 @@ class LLMNormalizer:
                 # Build output segments by joining the actual sentences.
                 result = []
                 for st, sp, emotion in spans:
-                    seg_text = " ".join(sentences[st - 1:sp]).strip()
+                    seg_text = " ".join(sentences[st - 1 : sp]).strip()
                     if seg_text:
                         result.append({"text": seg_text, "emotion": emotion})
                 if not result:
@@ -453,7 +492,9 @@ class LLMNormalizer:
         cursor = 0
         for a in anchors:
             anchor_text = a["text"]
-            head = anchor_text[:60]  # match by leading window — robust against LLM minor edits
+            head = anchor_text[
+                :60
+            ]  # match by leading window — robust against LLM minor edits
             idx = source.find(head, cursor)
             if idx == -1:
                 # fall back to a shorter prefix
@@ -465,13 +506,15 @@ class LLMNormalizer:
             cursor = idx + max(1, len(head))
 
         if not positions:
-            logger.warning("Could not anchor any LLM segment to source; using single neutral segment")
+            logger.warning(
+                "Could not anchor any LLM segment to source; using single neutral segment"
+            )
             return [{"text": source, "emotion": "neutral"}]
 
         # Build final segments by cutting source at each position
         result = []
         if positions[0][0] > 0:
-            head_text = source[:positions[0][0]].strip()
+            head_text = source[: positions[0][0]].strip()
             if head_text:
                 result.append({"text": head_text, "emotion": "neutral"})
         for k, (start, emotion) in enumerate(positions):
@@ -499,6 +542,7 @@ class LLMNormalizer:
     def MAX_LLM_RETRIES(self) -> int:
         """Read live from config so settings changes apply without restart."""
         from . import config
+
         return int(getattr(config, "LLM_MAX_RETRIES", 3))
 
     def _validate_replacements(self, source: str, replacements: list) -> list:
@@ -537,7 +581,9 @@ class LLMNormalizer:
                 raise ValueError(
                     f"'find'={find!r} occurrence #{occurrence} not present in source"
                 )
-            resolved.append({"start": start, "end": start + len(find), "replace": replace})
+            resolved.append(
+                {"start": start, "end": start + len(find), "replace": replace}
+            )
 
         resolved.sort(key=lambda x: x["start"])
         for a, b in zip(resolved, resolved[1:]):
@@ -549,7 +595,7 @@ class LLMNormalizer:
         out = []
         cursor = 0
         for r in resolved:
-            out.append(source[cursor:r["start"]])
+            out.append(source[cursor : r["start"]])
             out.append(r["replace"])
             cursor = r["end"]
         out.append(source[cursor:])
@@ -583,7 +629,7 @@ class LLMNormalizer:
             '{"find": "3:45 PM", "occurrence": 1, "replace": "three forty-five PM"}, '
             '{"find": "1995", "occurrence": 1, "replace": "nineteen ninety-five"}, '
             '{"find": "Dr.", "occurrence": 2, "replace": "Doctor"}'
-            ']}'
+            "]}"
         )
 
         last_error = None
@@ -639,9 +685,9 @@ class LLMNormalizer:
             "edits return an empty list.\n"
             "Output ONLY a JSON object with one key: replacements (a list).\n"
             "Example:\n"
-            "  PREVIOUS: \"Sarah opened the door.\"\n"
-            "  SEGMENT: \"Then she walked inside.\"\n"
-            "  NEXT: \"The room was dark.\"\n"
+            '  PREVIOUS: "Sarah opened the door."\n'
+            '  SEGMENT: "Then she walked inside."\n'
+            '  NEXT: "The room was dark."\n'
             '  Output: {"replacements": [{"find": "she", "occurrence": 1, "replace": "Sarah"}]}'
         )
 
@@ -658,7 +704,14 @@ class LLMNormalizer:
                 output = self._call_llm(
                     prompt,
                     max_tokens=1024,
-                    stops=["\n\nPREVIOUS:", "\n\nSEGMENT:", "\n\nNEXT:", "\n\nJSON:", "</s>", "<|eot_id|>"],
+                    stops=[
+                        "\n\nPREVIOUS:",
+                        "\n\nSEGMENT:",
+                        "\n\nNEXT:",
+                        "\n\nJSON:",
+                        "</s>",
+                        "<|eot_id|>",
+                    ],
                 )
                 data = self._extract_json(output)
                 if not isinstance(data, dict) or "replacements" not in data:
@@ -742,6 +795,7 @@ class LLMNormalizer:
         project_language = None
         if chunks:
             from collections import Counter
+
             votes: list[str] = []
             n_probe = min(10, len(chunks))
             for probe_chunk in chunks[:n_probe]:
@@ -780,7 +834,9 @@ class LLMNormalizer:
                 try:
                     segs = self.analyze_emotions(chunk.text)
                 except RuntimeError:
-                    logger.warning(f"LLM emotion analysis failed for chunk {i}, using neutral fallback")
+                    logger.warning(
+                        f"LLM emotion analysis failed for chunk {i}, using neutral fallback"
+                    )
                     segs = [{"text": chunk.text, "emotion": "neutral"}]
                 ends_paragraph = chunk.ends_paragraph
                 if project_language is not None:
@@ -789,35 +845,48 @@ class LLMNormalizer:
                     try:
                         language = self.detect_language(chunk.text)
                     except RuntimeError:
-                        logger.warning(f"LLM language detection failed for chunk {i}, using default")
+                        logger.warning(
+                            f"LLM language detection failed for chunk {i}, using default"
+                        )
                         language = self.DEFAULT_LANGUAGE
                     report(f"[A] chunk {i + 1} language: {language}")
-                storage.save_chunk_meta(i, {
-                    "segments": segs,
-                    "ends_paragraph": ends_paragraph,
-                    "language": language,
-                })
+                storage.save_chunk_meta(
+                    i,
+                    {
+                        "segments": segs,
+                        "ends_paragraph": ends_paragraph,
+                        "language": language,
+                    },
+                )
                 # back-compat shim: legacy JSON files in cache root for older tests
                 legacy_file = cache_dir / f"chunk_{i:03d}.json"
                 legacy_file.write_text(
-                    json.dumps({
-                        "normalized_text": chunk.text,
-                        "emotion": segs[0]["emotion"] if segs else "neutral",
-                        "detected_emotions": [s["emotion"] for s in segs] or ["neutral"],
-                        "language": language,
-                    }, ensure_ascii=False),
+                    json.dumps(
+                        {
+                            "normalized_text": chunk.text,
+                            "emotion": segs[0]["emotion"] if segs else "neutral",
+                            "detected_emotions": [s["emotion"] for s in segs]
+                            or ["neutral"],
+                            "language": language,
+                        },
+                        ensure_ascii=False,
+                    ),
                     encoding="utf-8",
                 )
 
             for j, seg in enumerate(segs):
-                analyzed.append({
-                    "text": seg["text"],
-                    "emotion": seg["emotion"],
-                    "ends_paragraph": ends_paragraph if j == len(segs) - 1 else False,
-                    "source_chunk": i,
-                    "source_file": chunk.source_file,
-                    "language": language,
-                })
+                analyzed.append(
+                    {
+                        "text": seg["text"],
+                        "emotion": seg["emotion"],
+                        "ends_paragraph": (
+                            ends_paragraph if j == len(segs) - 1 else False
+                        ),
+                        "source_chunk": i,
+                        "source_file": chunk.source_file,
+                        "language": language,
+                    }
+                )
 
         # --- Step B: re-chunk over-budget segments ----------------------------
         from .chunker import split_to_chunks
@@ -829,18 +898,26 @@ class LLMNormalizer:
             if len(words) <= max_words:
                 rechunked.append(seg)
                 continue
-            sub = split_to_chunks(seg["text"], max_words, source_file=seg.get("source_file", "default"))
+            sub = split_to_chunks(
+                seg["text"], max_words, source_file=seg.get("source_file", "default")
+            )
             for k, s in enumerate(sub):
-                rechunked.append({
-                    "text": s.text,
-                    "emotion": seg["emotion"],
-                    "ends_paragraph": seg["ends_paragraph"] if k == len(sub) - 1 else False,
-                    "source_chunk": seg["source_chunk"],
-                    "source_file": seg.get("source_file", "default"),
-                    "language": seg.get("language", self.DEFAULT_LANGUAGE),
-                })
+                rechunked.append(
+                    {
+                        "text": s.text,
+                        "emotion": seg["emotion"],
+                        "ends_paragraph": (
+                            seg["ends_paragraph"] if k == len(sub) - 1 else False
+                        ),
+                        "source_chunk": seg["source_chunk"],
+                        "source_file": seg.get("source_file", "default"),
+                        "language": seg.get("language", self.DEFAULT_LANGUAGE),
+                    }
+                )
 
-        report(f"After A+B: {len(analyzed)} emotion segments -> {len(rechunked)} TTS-sized segments")
+        report(
+            f"After A+B: {len(analyzed)} emotion segments -> {len(rechunked)} TTS-sized segments"
+        )
 
         # --- Steps C/D skipped: use the verbatim split text as segment ------
         # The 1B model copies few-shot examples instead of processing the
@@ -864,6 +941,7 @@ class LLMNormalizer:
             storage.save_segment_meta(i, record)
             final.append(record)
 
-        report(f"Stage 1 complete: {len(chunks)} input chunks -> {len(final)} TTS segments")
+        report(
+            f"Stage 1 complete: {len(chunks)} input chunks -> {len(final)} TTS segments"
+        )
         return final
-

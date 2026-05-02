@@ -14,7 +14,7 @@
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import json
-import os
+import sys as _sys
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
@@ -85,7 +85,6 @@ _SETTINGS_KEYS = {
 # "code defaults". load_settings_from_file may overwrite the module
 # attributes, but this dict stays pinned to the in-code defaults so
 # the GUI's "Reset to Defaults" button has something stable to read.
-import sys as _sys
 _DEFAULTS: dict = {k: getattr(_sys.modules[__name__], k) for k in _SETTINGS_KEYS}
 
 
@@ -115,6 +114,7 @@ def reset_to_defaults(path: Path | None = None) -> dict:
 def load_settings_from_file(path: Path | None = None) -> dict:
     """Load persisted settings and apply them to this module's attributes."""
     import sys
+
     mod = sys.modules[__name__]
     path = path or SETTINGS_FILE
     if not path.exists():
@@ -145,4 +145,3 @@ def save_settings_to_file(settings: dict, path: Path | None = None) -> None:
             pass
     existing.update(settings)
     path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
-

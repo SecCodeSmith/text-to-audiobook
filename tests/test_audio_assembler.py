@@ -14,8 +14,10 @@
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 from pathlib import Path
+
 from src.audio_assembler import assemble
 from src.chunker import Chunk
+
 
 def test_assemble_returns_path(tmp_path):
     chunk_wavs = [tmp_path / f"chunk_{i}.wav" for i in range(3)]
@@ -33,6 +35,7 @@ def test_assemble_returns_path(tmp_path):
 
     assert isinstance(result, Path)
 
+
 def test_assemble_silence_gaps(tmp_path):
     chunk_wavs = [tmp_path / f"chunk_{i}.wav" for i in range(2)]
     for wav in chunk_wavs:
@@ -47,4 +50,3 @@ def test_assemble_silence_gaps(tmp_path):
     result = assemble(chunk_wavs, chunk_meta, out_path)
 
     assert result is not None
-

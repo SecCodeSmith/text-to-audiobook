@@ -48,6 +48,7 @@ htmlcov/
 .hypothesis/
 
 # Project specific
+AI report/
 *.gguf
 input/
 output/

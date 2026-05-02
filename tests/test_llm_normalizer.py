@@ -13,9 +13,9 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import json
-from pathlib import Path
+
 from src.llm_normalizer import LLMNormalizer
+
 
 def test_normalize_returns_dict():
     normalizer = LLMNormalizer("fake_model.gguf")
@@ -27,12 +27,14 @@ def test_normalize_returns_dict():
     assert "language" in result
     normalizer.unload()
 
+
 def test_normalize_without_load():
     normalizer = LLMNormalizer("fake_model.gguf")
     result = normalizer.normalize("Sample text")
     assert isinstance(result, dict)
     assert result["normalized_text"] == "Sample text"
     assert result["emotion"] == "neutral"
+
 
 def test_cache_file_creation(tmp_path):
     from src.chunker import Chunk
@@ -55,6 +57,7 @@ def test_cache_file_creation(tmp_path):
 
     normalizer.unload()
 
+
 def test_cache_resumable(tmp_path):
     from src.chunker import Chunk
 
@@ -68,15 +71,16 @@ def test_cache_resumable(tmp_path):
 
     cache_dir = tmp_path / "cache"
 
-    results1 = normalizer.process_all(chunks, cache_dir)
+    normalizer.process_all(chunks, cache_dir)
     cache_file_1 = (cache_dir / "chunk_000.json").stat().st_mtime
 
-    results2 = normalizer.process_all(chunks, cache_dir)
+    normalizer.process_all(chunks, cache_dir)
     cache_file_2 = (cache_dir / "chunk_000.json").stat().st_mtime
 
     assert cache_file_1 == cache_file_2
 
     normalizer.unload()
+
 
 def test_unload_clears_model():
     normalizer = LLMNormalizer("fake_model.gguf")
@@ -92,6 +96,7 @@ def test_detect_language_returns_default_without_llm():
 
 def test_detect_language_returns_value_in_supported_set():
     from unittest.mock import MagicMock
+
     normalizer = LLMNormalizer("fake_model.gguf")
     fake_llm = MagicMock()
     fake_llm.return_value = {"choices": [{"text": '{"language": "spanish"}'}]}
@@ -101,6 +106,7 @@ def test_detect_language_returns_value_in_supported_set():
 
 def test_detect_language_falls_back_on_unknown_response():
     from unittest.mock import MagicMock
+
     normalizer = LLMNormalizer("fake_model.gguf")
     fake_llm = MagicMock()
     fake_llm.return_value = {"choices": [{"text": '{"language": "klingon"}'}]}
@@ -110,6 +116,7 @@ def test_detect_language_falls_back_on_unknown_response():
 
 def test_process_all_records_carry_language(tmp_path):
     from src.chunker import Chunk
+
     normalizer = LLMNormalizer("fake_model.gguf")
     normalizer.load()
     chunks = [Chunk(text="Hello world.", ends_paragraph=True)]
@@ -120,4 +127,3 @@ def test_process_all_records_carry_language(tmp_path):
         assert "language" in record
         assert record["language"] in LLMNormalizer.SUPPORTED_LANGUAGES
     normalizer.unload()
-
