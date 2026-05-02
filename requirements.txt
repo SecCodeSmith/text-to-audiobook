@@ -1,0 +1,17 @@
+llama-cpp-python>=0.3.0
+transformers>=4.45.0
+qwen-tts>=0.1.1
+torch>=2.4.0
+accelerate>=0.34.0
+safetensors>=0.4.5
+soundfile>=0.12.1
+noisereduce>=3.0.3
+scipy>=1.13.0
+pydub>=0.25.1
+numpy>=1.26.0
+customtkinter>=5.2.2
+natsort>=8.4.0
+regex>=2024.9.11
+huggingface_hub>=0.23.0
+pytest>=8.3.0
+pytest-mock>=3.14.0

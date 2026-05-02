@@ -1,0 +1,177 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            artifact_name: ai-tts-linux
+            asset_name: ai-tts-linux
+          - os: windows-latest
+            artifact_name: ai-tts.exe
+            asset_name: ai-tts-windows.exe
+          - os: macos-latest
+            artifact_name: ai-tts.app
+            asset_name: ai-tts-macos.zip
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build Windows executable
+        if: runner.os == 'Windows'
+        run: |
+          pyinstaller `
+            --name "ai-tts" `
+            --onefile `
+            --windowed `
+            --icon=app.ico `
+            --add-data "settings.json:." `
+            --add-data "src:src" `
+            --hidden-import=customtkinter `
+            --hidden-import=torch `
+            --hidden-import=transformers `
+            main.py
+
+      - name: Build Linux executable
+        if: runner.os == 'Linux'
+        run: |
+          pyinstaller \
+            --name "ai-tts-linux" \
+            --onefile \
+            --add-data "settings.json:." \
+            --add-data "src:src" \
+            --hidden-import=customtkinter \
+            --hidden-import=torch \
+            --hidden-import=transformers \
+            main.py
+
+      - name: Build macOS app
+        if: runner.os == 'macOS'
+        run: |
+          pyinstaller \
+            --name "ai-tts" \
+            --onefile \
+            --windowed \
+            --osx-bundle-identifier=com.seccodesmith.aittts \
+            --add-data "settings.json:." \
+            --add-data "src:src" \
+            --hidden-import=customtkinter \
+            --hidden-import=torch \
+            --hidden-import=transformers \
+            main.py
+          cd dist && zip -r ai-tts-macos.zip "ai-tts.app" && cd ..
+
+      - name: Upload Windows artifact
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v3
+        with:
+          name: windows-exe
+          path: dist/ai-tts.exe
+
+      - name: Upload Linux artifact
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v3
+        with:
+          name: linux-binary
+          path: dist/ai-tts-linux
+
+      - name: Upload macOS artifact
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v3
+        with:
+          name: macos-app
+          path: dist/ai-tts-macos.zip
+
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests
+        run: |
+          pytest -v --tb=short
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+
+  create-release:
+    needs: [build, test]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            windows-exe/ai-tts.exe
+            linux-binary/ai-tts-linux
+            macos-app/ai-tts-macos.zip
+          body: |
+            # text-to-audiobook Release
+
+            This release includes pre-built executables for Windows, Linux, and macOS.
+
+            ## Download
+
+            - **Windows**: `ai-tts-windows.exe` - Ready to run
+            - **Linux**: `ai-tts-linux` - Make executable with `chmod +x ai-tts-linux`
+            - **macOS**: `ai-tts-macos.zip` - Extract and run `ai-tts.app`
+
+            ## Installation
+
+            See [README.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/README.md) for detailed instructions.
+
+            ## Notes
+
+            - First run may take several minutes to download AI models
+            - GPU acceleration requires NVIDIA CUDA
+            - CPU fallback available but slower
+
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

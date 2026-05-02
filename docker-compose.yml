@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  ai-tts:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-tts-app
+    volumes:
+      - ./input:/app/input
+      - ./output:/app/output
+      - ./cache:/app/cache
+      - ./logs:/app/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL_CONSOLE=INFO
+      - LOG_LEVEL_FILE=DEBUG
+      - STORAGE_BACKEND=sqlite
+    # Uncomment for GPU support (requires nvidia-docker)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
