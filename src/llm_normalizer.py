@@ -404,8 +404,16 @@ class LLMNormalizer:
                         rejected.append(("not-a-dict", seg))
                         continue
                     try:
-                        raw_start = seg.get("Start") if seg.get("Start") is not None else seg.get("start")
-                        raw_stop = seg.get("Stop") if seg.get("Stop") is not None else seg.get("stop")
+                        raw_start = (
+                            seg.get("Start")
+                            if seg.get("Start") is not None
+                            else seg.get("start")
+                        )
+                        raw_stop = (
+                            seg.get("Stop")
+                            if seg.get("Stop") is not None
+                            else seg.get("stop")
+                        )
                         if raw_start is None or raw_stop is None:
                             rejected.append(("missing-range", seg))
                             continue
