@@ -249,6 +249,48 @@ def prepare_segments(input_dir, output_dir, progress_cb=None, stop_event=None, s
     return results
 
 
+def _assemble_chapters(wav_paths: list, segments: list, final_path: Path, project_name: str, progress_cb=None) -> list:
+    """Assemble WAV files into per-chapter MP3s based on source_file metadata.
+
+    Returns list of output file paths.
+    """
+    progress = lambda m: _emit(progress_cb, m)
+    final_path = Path(final_path)
+    final_path.mkdir(parents=True, exist_ok=True)
+
+    from collections import defaultdict
+    by_source = defaultdict(list)
+    for i, seg in enumerate(segments):
+        source = seg.get("source_file", "default")
+        by_source[source].append((i, seg))
+
+    output_files = []
+
+    if len(by_source) == 1:
+        source_name = list(by_source.keys())[0]
+        seg_indices = [i for i, _ in by_source[source_name]]
+        chapter_wavs = [wav_paths[i] for i in seg_indices if i < len(wav_paths)]
+        if chapter_wavs:
+            assembled = assemble(chapter_wavs, [seg for _, seg in by_source[source_name]], final_path / "audiobook.mp3")
+            progress(f"[{project_name}] done -> {assembled}")
+            output_files.append(assembled)
+    else:
+        sorted_sources = sorted(by_source.keys())
+        progress(f"[{project_name}] {len(sorted_sources)} chapter(s) detected")
+        for chapter_num, source_name in enumerate(sorted_sources, start=1):
+            seg_indices = [i for i, _ in by_source[source_name]]
+            chapter_wavs = [wav_paths[i] for i in seg_indices if i < len(wav_paths)]
+            if not chapter_wavs:
+                progress(f"  chapter {chapter_num} ({source_name}): no WAVs found")
+                continue
+            out_file = final_path / f"chapter_{chapter_num:02d}.mp3"
+            assembled = assemble(chapter_wavs, [seg for _, seg in by_source[source_name]], out_file)
+            progress(f"  chapter {chapter_num} ({source_name}): {len(chapter_wavs)} chunks -> {assembled}")
+            output_files.append(assembled)
+
+    return output_files
+
+
 def generate_audio_for_project(project_name, segments, output_root, progress_cb=None, tts=None, stop_event=None, narrator_prompt=None, chunk_done_cb=None):
     """Stage 2 for a single project. Returns path to assembled audiobook."""
     progress = lambda m: _emit(progress_cb, m)
@@ -288,9 +330,17 @@ def generate_audio_for_project(project_name, segments, output_root, progress_cb=
         progress(f"[{project_name}] assembling final audio...")
         final_path = project_out / "final"
         final_path.mkdir(parents=True, exist_ok=True)
-        assembled = assemble(wav_paths, segments, final_path / "audiobook.mp3")
-        progress(f"[{project_name}] done -> {assembled}")
-        return assembled
+
+        if config.CHAPTER_BY_CHAPTER:
+            output_files = _assemble_chapters(wav_paths, segments, final_path, project_name, progress_cb)
+            if output_files:
+                progress(f"[{project_name}] done -> chapter files generated")
+                return output_files[0]
+        else:
+            assembled = assemble(wav_paths, segments, final_path / "audiobook.mp3")
+            progress(f"[{project_name}] done -> {assembled}")
+            return assembled
+        return None
     finally:
         if own_tts:
             tts.unload()
@@ -627,13 +677,17 @@ def assemble_final_for_project(project_name, segments, output_root, progress_cb=
 
     output_files = []
 
-    if len(by_source) == 1:
-        # Single chapter: use classic "audiobook.mp3" name
-        source_name = list(by_source.keys())[0]
-        seg_indices = [i for i, _ in by_source[source_name]]
-        chapter_wavs = [wav_files[i] for i in seg_indices if i < len(wav_files)]
-        if chapter_wavs:
-            assembled = assemble(chapter_wavs, [seg for _, seg in by_source[source_name]], final_path / "audiobook.mp3")
+    if len(by_source) == 1 or not config.CHAPTER_BY_CHAPTER:
+        # Single file: use classic "audiobook.mp3" name
+        all_wavs = []
+        all_segs = []
+        for source_name in sorted(by_source.keys()):
+            seg_indices = [i for i, _ in by_source[source_name]]
+            chapter_wavs = [wav_files[i] for i in seg_indices if i < len(wav_files)]
+            all_wavs.extend(chapter_wavs)
+            all_segs.extend([seg for _, seg in by_source[source_name]])
+        if all_wavs:
+            assembled = assemble(all_wavs, all_segs, final_path / "audiobook.mp3")
             progress(f"[{project_name}] done -> {assembled}")
             output_files.append(assembled)
     else:

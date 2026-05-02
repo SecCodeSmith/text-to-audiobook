@@ -35,6 +35,7 @@ SILENCE_AFTER_PERIOD_MS = 500
 SILENCE_AFTER_PARAGRAPH_MS = 1200
 TTS_MAX_TOKENS = 100
 TTS_MAX_WORDS_FALLBACK = 100
+CHAPTER_BY_CHAPTER = False
 
 LOG_LEVEL_CONSOLE = "INFO"
 LOG_LEVEL_FILE = "DEBUG"
@@ -77,6 +78,7 @@ _SETTINGS_KEYS = {
     "STORAGE_BACKEND": str,
     "TTS_MAX_TOKENS": int,
     "TTS_MAX_WORDS_FALLBACK": int,
+    "CHAPTER_BY_CHAPTER": bool,
 }
 
 # Snapshot the values defined above as the single source of truth for

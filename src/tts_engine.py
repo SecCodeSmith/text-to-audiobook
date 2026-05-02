@@ -82,6 +82,12 @@ class TTSEngine:
         kwargs = self._make_load_kwargs()
         engine = Qwen3TTSModel.from_pretrained(self.model_name, **kwargs)
         try:
+            if torch is not None and hasattr(engine, "model") and engine.model is not None:
+                try:
+                    engine.model = torch.compile(engine.model, mode="reduce-overhead")
+                except Exception as e:
+                    logger.debug(f"torch.compile not available or failed: {e}")
+
             self._set_seed()
             wavs, sr = engine.generate(
                 text=_VOICE_REF_TEXT,
@@ -115,6 +121,13 @@ class TTSEngine:
         gpu = torch is not None and torch.cuda.is_available()
         logger.info(f"Loading TTS model: {self.model_name} ({'GPU' if gpu else 'CPU'})")
         self.engine = Qwen3TTSModel.from_pretrained(self.model_name, **kwargs)
+
+        if torch is not None and hasattr(self.engine, "model") and self.engine.model is not None:
+            try:
+                logger.info("Compiling model with torch.compile for optimized inference...")
+                self.engine.model = torch.compile(self.engine.model, mode="reduce-overhead")
+            except Exception as e:
+                logger.debug(f"torch.compile not available or failed: {e}")
 
         if ref_path.exists():
             self._voice_ref_path = ref_path

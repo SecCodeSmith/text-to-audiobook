@@ -31,7 +31,7 @@ def fake_wrapper_cls():
         wrapper = MagicMock()
         wrapper.model = MagicMock()
         wrapper.processor = MagicMock()
-        wrapper.generate_voice_design.return_value = (
+        wrapper.generate.return_value = (
             [np.zeros(config.SAMPLE_RATE * 1, dtype=np.float32)],
             config.SAMPLE_RATE,
         )
@@ -64,7 +64,7 @@ def test_synthesize_first_writes_wav(fake_wrapper_cls, tmp_path):
     assert isinstance(result[0], Path)
     assert engine.anchor_path == result[0]
     _, wrapper = fake_wrapper_cls
-    wrapper.generate_voice_design.assert_called_once()
+    wrapper.generate_voice_clone.assert_called_once()
 
 
 def test_synthesize_with_anchor_writes_wav(fake_wrapper_cls, tmp_path):
@@ -93,9 +93,8 @@ def test_process_all_writes_n_chunks(fake_wrapper_cls, tmp_path):
     assert len(wav_paths) >= 3
     assert engine.anchor_path == wav_paths[0]
     _, wrapper = fake_wrapper_cls
-    # First chunk uses generate_voice_design, subsequent use generate_voice_clone
-    assert wrapper.generate_voice_design.call_count == 1
-    assert wrapper.generate_voice_clone.call_count == 2
+    # All chunks use generate_voice_clone
+    assert wrapper.generate_voice_clone.call_count == 3
 
 
 def test_process_all_resumes_skipping_existing(fake_wrapper_cls, tmp_path):
@@ -142,7 +141,7 @@ def test_stop_event_breaks_loop(fake_wrapper_cls, tmp_path):
             stop.set()  # Trigger stop after the first synthesis returns.
         return ([np.zeros(config.SAMPLE_RATE, dtype=np.float32)], config.SAMPLE_RATE)
 
-    wrapper.generate_voice_design.side_effect = fake_generate
+    wrapper.generate_voice_clone.side_effect = fake_generate
 
     payloads = [{"normalized_text": f"chunk {i}"} for i in range(5)]
     out_dir = tmp_path / "out"
@@ -173,14 +172,12 @@ def test_process_all_passes_per_segment_language(fake_wrapper_cls, tmp_path):
     out_dir = tmp_path / "out"
     engine.process_all(payloads, out_dir)
     _, wrapper = fake_wrapper_cls
-    # First chunk uses generate_voice_design, rest use generate_voice_clone
-    design_calls = wrapper.generate_voice_design.call_args_list
+    # All chunks use generate_voice_clone
     clone_calls = wrapper.generate_voice_clone.call_args_list
-    assert len(design_calls) == 1
-    assert design_calls[0].kwargs["language"] == "english"
-    assert len(clone_calls) == 2
-    assert clone_calls[0].kwargs["language"] == "spanish"
-    assert clone_calls[1].kwargs["language"] == "french"
+    assert len(clone_calls) == 3
+    assert clone_calls[0].kwargs["language"] == "english"
+    assert clone_calls[1].kwargs["language"] == "spanish"
+    assert clone_calls[2].kwargs["language"] == "french"
 
 
 def test_process_all_defaults_language_when_missing(fake_wrapper_cls, tmp_path):
@@ -189,6 +186,6 @@ def test_process_all_defaults_language_when_missing(fake_wrapper_cls, tmp_path):
     payloads = [{"normalized_text": "No lang field."}]
     engine.process_all(payloads, tmp_path / "out")
     _, wrapper = fake_wrapper_cls
-    call = wrapper.generate_voice_design.call_args_list[0]
+    call = wrapper.generate_voice_clone.call_args_list[0]
     assert call.kwargs["language"] == TTSEngine.DEFAULT_LANGUAGE
 

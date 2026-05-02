@@ -186,6 +186,12 @@ class SettingsWindow(ctk.CTkToplevel):
         _row(frame, "SILENCE_AFTER_PARAGRAPH_MS", "Silence after paragraph (ms)",
              _cur("SILENCE_AFTER_PARAGRAPH_MS"))
 
+        _section("Output Format")
+        chapter_var = ctk.StringVar(value=str(_cur("CHAPTER_BY_CHAPTER")).lower())
+        self._fields["CHAPTER_BY_CHAPTER"] = chapter_var
+        _row(frame, "CHAPTER_BY_CHAPTER", "Chapter-by-chapter files", _cur("CHAPTER_BY_CHAPTER"),
+             entry_type="choice", choices=["true", "false"])
+
         _section("Logging")
         _row(frame, "LOG_LEVEL_CONSOLE", "Console log level",
              _cur("LOG_LEVEL_CONSOLE"), entry_type="choice")
@@ -212,6 +218,7 @@ class SettingsWindow(ctk.CTkToplevel):
             "CROSSFADE_MS", "SILENCE_AFTER_PERIOD_MS", "SILENCE_AFTER_PARAGRAPH_MS",
             "LLM_MAX_RETRIES", "TTS_MAX_TOKENS", "TTS_MAX_WORDS_FALLBACK",
         }
+        bool_keys = {"CHAPTER_BY_CHAPTER"}
         settings = {}
         for key, var in self._fields.items():
             raw = var.get().strip()
@@ -221,6 +228,8 @@ class SettingsWindow(ctk.CTkToplevel):
                 except ValueError:
                     logger.warning(f"Settings: invalid integer for {key}: {raw!r} — skipped")
                     continue
+            elif key in bool_keys:
+                val = raw.lower() in ("true", "1", "yes")
             else:
                 val = raw
             settings[key] = val
@@ -240,7 +249,11 @@ class SettingsWindow(ctk.CTkToplevel):
         defaults = config.reset_to_defaults()
         for key, var in self._fields.items():
             if key in defaults:
-                var.set(str(defaults[key]))
+                val = defaults[key]
+                if key == "CHAPTER_BY_CHAPTER":
+                    var.set(str(val).lower())
+                else:
+                    var.set(str(val))
         # Apply log levels right away so the running app reflects the reset.
         logging_setup.set_levels(
             defaults.get("LOG_LEVEL_CONSOLE", "INFO"),
@@ -473,6 +486,14 @@ class TTSApp:
         control_frame = ctk.CTkFrame(frame)
         control_frame.grid(row=5, column=0, sticky="ew", **_PAD)
 
+        self._chapter_mode_var = tk.BooleanVar(value=config.CHAPTER_BY_CHAPTER)
+        self._chapter_mode_cb = ctk.CTkCheckBox(
+            control_frame, text="Chapter-by-chapter",
+            variable=self._chapter_mode_var,
+            command=self._toggle_chapter_mode,
+        )
+        self._chapter_mode_cb.pack(side="left", padx=4, pady=4)
+
         self.stop_btn = ctk.CTkButton(
             control_frame, text="Stop", command=self._request_stop,
             fg_color="#a87832", hover_color="#7a5a24", width=80, state="disabled",
@@ -659,6 +680,13 @@ class TTSApp:
                 logger.warning(f"Quick config: invalid value for {key}: {var.get()!r}")
         config.save_settings_to_file(settings)
         logger.info("Quick config applied.")
+
+    def _toggle_chapter_mode(self):
+        val = self._chapter_mode_var.get()
+        setattr(config, "CHAPTER_BY_CHAPTER", val)
+        config.save_settings_to_file({"CHAPTER_BY_CHAPTER": val})
+        mode = "chapter-by-chapter" if val else "single file"
+        logger.info(f"Output mode changed to: {mode}")
 
     # -----------------------------------------------------------------------
     # Close confirmation
@@ -1167,8 +1195,8 @@ class TTSApp:
         self._fix_lang_btn.configure(state="disabled")
 
         def work():
-            import json as _json
             from collections import Counter
+            from .storage_factory import create_storage
             try:
                 from .llm_normalizer import LLMNormalizer
             except Exception as e:
@@ -1186,27 +1214,23 @@ class TTSApp:
 
             try:
                 for project_name in selected:
-                    seg_dir = config.CACHE_DIR / project_name / "segments"
-                    if not seg_dir.exists():
-                        logger.info(f"No cached segments for '{project_name}', skipping.")
+                    project_cache_dir = config.CACHE_DIR / project_name
+                    if not project_cache_dir.exists():
+                        logger.info(f"No cache for '{project_name}', skipping.")
                         continue
 
-                    seg_files = sorted(seg_dir.glob("seg_*.json"))
-                    segments_data = []
-                    for f in seg_files:
-                        try:
-                            segments_data.append((f, _json.loads(f.read_text(encoding="utf-8"))))
-                        except Exception:
-                            pass
+                    storage = create_storage(project_cache_dir)
+                    segments_data = storage.list_all_segments()
 
                     if not segments_data:
+                        logger.info(f"No segments for '{project_name}', skipping.")
                         continue
 
                     # Determine majority language.
-                    langs = [d.get("language", "english") for _, d in segments_data]
+                    langs = [d.get("language", "english") for d in segments_data]
                     majority_lang = Counter(langs).most_common(1)[0][0]
                     outliers = [
-                        (f, d) for f, d in segments_data
+                        (i, d) for i, d in enumerate(segments_data)
                         if d.get("language", "english") != majority_lang
                     ]
 
@@ -1221,14 +1245,13 @@ class TTSApp:
                         f"re-checking {len(outliers)} outlier(s)..."
                     )
                     fixed = []
-                    for f, d in outliers:
+                    for seg_id, d in outliers:
                         text = d.get("normalized_text", "")
                         old_lang = d.get("language", "unknown")
                         new_lang = normalizer.detect_language(text)
                         if new_lang != old_lang:
                             d["language"] = new_lang
-                            f.write_text(_json.dumps(d, ensure_ascii=False, indent=2),
-                                         encoding="utf-8")
+                            storage.save_segment_meta(seg_id, d)
                             fixed.append(f"{old_lang}→{new_lang}")
 
                     if fixed:
