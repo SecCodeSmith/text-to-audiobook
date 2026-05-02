@@ -1,9 +1,9 @@
-# Multi-stage build for text-to-audiobook
+# Build stage
 FROM python:3.10-slim as builder
 
 WORKDIR /build
 
-# Install system dependencies
+# Install build dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
     git \
@@ -12,16 +12,17 @@ RUN apt-get update && apt-get install -y \
 # Copy requirements
 COPY requirements.txt .
 
-# Create wheels for all dependencies
-RUN pip install --no-cache-dir wheel && \
-    pip wheel --no-cache-dir --no-deps --wheel-dir /build/wheels -r requirements.txt
+# Create wheels for all dependencies (including their own dependencies)
+RUN pip install --upgrade pip && \
+    pip install wheel && \
+    pip wheel --no-cache-dir --wheel-dir /build/wheels -r requirements.txt
 
 # Final stage
 FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install runtime dependencies only
+# Install runtime dependencies
 RUN apt-get update && apt-get install -y \
     libsndfile1 \
     ffmpeg \
@@ -31,8 +32,9 @@ RUN apt-get update && apt-get install -y \
 COPY --from=builder /build/wheels /wheels
 COPY --from=builder /build/requirements.txt .
 
-# Install dependencies from wheels
-RUN pip install --no-cache-dir /wheels/*
+# Install dependencies from wheels (pip will resolve dependencies from wheel files)
+RUN pip install --no-cache-dir --no-index --find-links /wheels -r requirements.txt && \
+    rm -rf /wheels
 
 # Copy application code
 COPY . .
