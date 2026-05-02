@@ -85,6 +85,9 @@ def mock_qwen3_tts_from_pretrained(*args, **kwargs):
     wrapper.model = MagicMock()
     wrapper.model.device = 'cpu'
     wrapper.processor = MagicMock()
+    wrapper.generate = MagicMock(
+        return_value=([np.zeros(48000, dtype=np.float32)], 24000)
+    )
     wrapper.generate_voice_design = MagicMock(
         return_value=([np.zeros(48000, dtype=np.float32)], 24000)
     )

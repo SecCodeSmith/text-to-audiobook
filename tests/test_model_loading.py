@@ -22,7 +22,9 @@ model class with AutoConfig/AutoModel/AutoProcessor before delegating
 to transformers. These tests pin that contract in place.
 """
 from unittest.mock import MagicMock, patch
+from pathlib import Path
 
+import numpy as np
 import pytest
 
 from src import config
@@ -33,6 +35,9 @@ def _fake_wrapper():
     wrapper = MagicMock()
     wrapper.model = MagicMock(name="Qwen3TTSForConditionalGeneration")
     wrapper.processor = MagicMock(name="Qwen3TTSProcessor")
+    wrapper.generate = MagicMock(
+        return_value=([np.zeros(config.SAMPLE_RATE * 1, dtype=np.float32)], config.SAMPLE_RATE)
+    )
     return wrapper
 
 
@@ -41,12 +46,16 @@ def test_tts_load_uses_qwen_wrapper():
     engine = TTSEngine()
     with patch("src.tts_engine.Qwen3TTSModel") as mock_cls:
         mock_cls.from_pretrained.return_value = _fake_wrapper()
-        engine.load()
+        with patch("src.tts_engine.Path") as mock_path:
+            mock_voice_ref = MagicMock()
+            mock_voice_ref.exists.return_value = True
+            mock_path.return_value = mock_voice_ref
+            engine.load()
 
-        mock_cls.from_pretrained.assert_called_once()
-        args, kwargs = mock_cls.from_pretrained.call_args
-        assert args[0] == config.TTS_MODEL_NAME
-        assert kwargs.get("trust_remote_code") is True
+            mock_cls.from_pretrained.assert_called_once()
+            args, kwargs = mock_cls.from_pretrained.call_args
+            assert args[0] == config.TTS_MODEL_NAME
+            assert kwargs.get("trust_remote_code") is True
 
 
 def test_tts_load_propagates_registration_error():
@@ -79,9 +88,13 @@ def test_tts_engine_exposes_back_compat_properties():
     with patch("src.tts_engine.Qwen3TTSModel") as mock_cls:
         wrapper = _fake_wrapper()
         mock_cls.from_pretrained.return_value = wrapper
-        engine.load()
-        assert engine.model is wrapper.model
-        assert engine.processor is wrapper.processor
+        with patch("src.tts_engine.Path") as mock_path:
+            mock_voice_ref = MagicMock()
+            mock_voice_ref.exists.return_value = True
+            mock_path.return_value = mock_voice_ref
+            engine.load()
+            assert engine.model is wrapper.model
+            assert engine.processor is wrapper.processor
 
 
 def test_llm_load_instantiates_llama_with_configured_path():

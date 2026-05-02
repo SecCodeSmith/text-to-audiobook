@@ -46,11 +46,13 @@ def fake_wrapper_cls():
 def test_load_calls_qwen_wrapper(fake_wrapper_cls):
     mock_cls, _ = fake_wrapper_cls
     engine = TTSEngine()
-    engine.load()
+    with patch("src.tts_engine.Path") as mock_path:
+        mock_voice_ref = MagicMock()
+        mock_voice_ref.exists.return_value = True
+        mock_path.return_value = mock_voice_ref
+        engine.load()
     mock_cls.from_pretrained.assert_called_once()
-    args, _kwargs = mock_cls.from_pretrained.call_args
-    assert args[0] == config.TTS_MODEL_NAME
-    args, _kwargs = mock_cls.from_pretrained.call_args
+    args, _ = mock_cls.from_pretrained.call_args
     assert args[0] == config.TTS_MODEL_NAME
 
 
