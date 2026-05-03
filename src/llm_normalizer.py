@@ -349,7 +349,10 @@ class LLMNormalizer:
                     chapter_title = str(chapter_title).strip()
                     if not chapter_title:
                         chapter_title = None
-                return {"chapter_number": chapter_number, "chapter_title": chapter_title}
+                return {
+                    "chapter_number": chapter_number,
+                    "chapter_title": chapter_title,
+                }
             except Exception as e:
                 last_error = e
                 logger.warning(

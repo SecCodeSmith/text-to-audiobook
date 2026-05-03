@@ -544,7 +544,7 @@ class TTSEngine:
             tags[COMM.FrameID] = COMM(
                 desc="",
                 lang="eng",
-                text=[f"Chunk {chunk_number}, Chapter {chapter_number}"]
+                text=[f"Chunk {chunk_number}, Chapter {chapter_number}"],
             )
 
             tags.save(str(wav_path), v2_version=3)
