@@ -521,9 +521,10 @@ class TTSEngine:
           - COMM (Comment): "Chunk {chunk_number}, Chapter {chapter_number}"
         """
         try:
-            from mutagen.id3 import ID3, COMM, TALB, TDRC, TCON, TIT2, TRCK, TPE1
-            from pathlib import Path
             from datetime import datetime
+            from pathlib import Path
+
+            from mutagen.id3 import COMM, ID3, TALB, TCON, TDRC, TIT2, TPE1, TRCK
 
             chunk_number = payload.get("chunk_number", 0)
             chapter_number = payload.get("chapter_number", 1)
