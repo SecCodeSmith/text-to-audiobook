@@ -294,7 +294,3 @@ Dependencies & Models:
 - Llama-3.2: Meta Community License Agreement
 
 See [LICENSE](LICENSE) for full AGPL-3.0 text and [License notice](docs/LICENSES_NOTICES.md) for comprehensive dependency and model license documentation.
-
-## Author
-
-Built with Anthropic Claude AI and tested-driven development (TDD) workflow.
