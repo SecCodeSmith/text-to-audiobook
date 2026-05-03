@@ -160,6 +160,28 @@ class LLMNormalizer:
         "calm",
         "tense",
         "melancholic",
+        "ecstatic",
+        "inspired",
+        "hopeful",
+        "proud",
+        "amused",
+        "grateful",
+        "content",
+        "relieved",
+        "affectionate",
+        "disgusted",
+        "frustrated",
+        "envious",
+        "panicked",
+        "bored",
+        "lonely",
+        "guilty",
+        "ashamed",
+        "apathetic",
+        "nostalgic",
+        "confused",
+        "awkward",
+        "skeptical",
     ]
 
     # Languages Qwen3-TTS-VoiceDesign accepts as the `language=` argument.
@@ -176,6 +198,14 @@ class LLMNormalizer:
         "korean",
     ]
     DEFAULT_LANGUAGE = "english"
+
+    # Speaking speed options for TTS
+    SPEAKING_SPEEDS = [
+        "slow",
+        "normal",
+        "fast",
+    ]
+    DEFAULT_SPEAKING_SPEED = "normal"
 
     @staticmethod
     def _script_candidates(text: str) -> set:
@@ -211,6 +241,172 @@ class LLMNormalizer:
             return {"english", "spanish", "french", "german", "italian", "portuguese"}
         # Too short / mixed / unknown: trust the LLM.
         return set(LLMNormalizer.SUPPORTED_LANGUAGES)
+
+    @staticmethod
+    def format_chapter_title(source_file: str) -> str:
+        """Convert source filename to a readable chapter title.
+
+        Examples: "Chapter_01.md" -> "Chapter 01"
+                  "intro.txt" -> "Intro"
+                  "01_prologue.md" -> "Prologue"
+        """
+        # Remove file extension
+        name = Path(source_file).stem
+        # Replace underscores and hyphens with spaces
+        name = name.replace("_", " ").replace("-", " ")
+        # Capitalize each word
+        name = " ".join(w.capitalize() for w in name.split() if w)
+        return name or "Chapter"
+
+    def detect_speaking_speed(self, text: str) -> str:
+        """Detect the appropriate speaking speed for the given text.
+
+        Analyzes text characteristics (punctuation density, sentence length,
+        emotional tone indicators) to recommend a speaking speed.
+        Returns one of: "slow", "normal", "fast".
+        """
+        if self.llm is None or not text.strip():
+            return self.DEFAULT_SPEAKING_SPEED
+
+        sample = text[:500]
+        speeds_csv = ", ".join(self.SPEAKING_SPEEDS)
+        system_prompt = (
+            "Analyze the text and recommend a speaking speed for narration.\n"
+            f"Options: {speeds_csv}\n"
+            "Consider: sentence length, punctuation density, emotional indicators, complexity.\n"
+            "Output ONLY a JSON object with one key: speed (lowercase).\n"
+            f"If unsure, use default: {self.DEFAULT_SPEAKING_SPEED}\n"
+            'Example: {"speed": "normal"}'
+        )
+
+        last_error = None
+        for attempt in range(1, self.MAX_LLM_RETRIES + 1):
+            try:
+                prompt = f"{system_prompt}\n\nText:\n{sample}\n\nJSON:"
+                output = self._call_llm(
+                    prompt,
+                    max_tokens=64,
+                    stops=["\n\nText:", "\n\nJSON:", "</s>", "<|eot_id|>"],
+                )
+                data = self._extract_json(output)
+                if not isinstance(data, dict):
+                    raise ValueError(f"non-dict response: {output!r}")
+                speed = str(data.get("speed", "")).strip().lower()
+                if not speed or speed not in self.SPEAKING_SPEEDS:
+                    return self.DEFAULT_SPEAKING_SPEED
+                return speed
+            except Exception as e:
+                last_error = e
+                logger.warning(
+                    f"detect_speaking_speed attempt {attempt}/{self.MAX_LLM_RETRIES} failed: {e}"
+                )
+
+        logger.warning(
+            f"detect_speaking_speed failed after {self.MAX_LLM_RETRIES} attempts: {last_error}; using default"
+        )
+        return self.DEFAULT_SPEAKING_SPEED
+
+    def detect_chapter_info(self, text: str) -> dict:
+        """Detect chapter number and title from text.
+
+        Looks for patterns like "CHAPTER 2. The Beginning" and extracts
+        the chapter number and title. Returns {chapter_number, chapter_title}
+        with None values on failure.
+        """
+        if self.llm is None or not text.strip():
+            return {"chapter_number": None, "chapter_title": None}
+
+        sample = text[:1000]
+        system_prompt = (
+            "Extract chapter information from the text.\n"
+            "Look for patterns like: 'CHAPTER 2. The Beginning', 'Chapter II - Title', etc.\n"
+            "Output ONLY a JSON object with two keys:\n"
+            "  - chapter_number: extracted integer chapter number, or null if not found\n"
+            "  - chapter_title: extracted chapter title string, or null if not found\n"
+            'Example: {"chapter_number": 2, "chapter_title": "The Beginning"}'
+        )
+
+        last_error = None
+        for attempt in range(1, self.MAX_LLM_RETRIES + 1):
+            try:
+                prompt = f"{system_prompt}\n\nText:\n{sample}\n\nJSON:"
+                output = self._call_llm(
+                    prompt,
+                    max_tokens=128,
+                    stops=["\n\nText:", "\n\nJSON:", "</s>", "<|eot_id|>"],
+                )
+                data = self._extract_json(output)
+                if not isinstance(data, dict):
+                    raise ValueError(f"non-dict response: {output!r}")
+                chapter_number = data.get("chapter_number")
+                chapter_title = data.get("chapter_title")
+                if chapter_number is not None:
+                    try:
+                        chapter_number = int(chapter_number)
+                    except (TypeError, ValueError):
+                        chapter_number = None
+                if chapter_title is not None:
+                    chapter_title = str(chapter_title).strip()
+                    if not chapter_title:
+                        chapter_title = None
+                return {"chapter_number": chapter_number, "chapter_title": chapter_title}
+            except Exception as e:
+                last_error = e
+                logger.warning(
+                    f"detect_chapter_info attempt {attempt}/{self.MAX_LLM_RETRIES} failed: {e}"
+                )
+
+        logger.warning(
+            f"detect_chapter_info failed after {self.MAX_LLM_RETRIES} attempts: {last_error}"
+        )
+        return {"chapter_number": None, "chapter_title": None}
+
+    def detect_story_title(self, text: str) -> str:
+        """Detect the story/book title from text context.
+
+        Analyzes the text to infer the story or book title (from title pages,
+        headers, or overall context). Returns the title string or None on failure.
+        """
+        if self.llm is None or not text.strip():
+            return None
+
+        sample = text[:1000]
+        system_prompt = (
+            "Infer the story, book, or novel title from the provided text.\n"
+            "Look for: title pages, chapter headers, author references, or contextual clues.\n"
+            "Output ONLY a JSON object with one key:\n"
+            "  - title: the inferred title string, or null if not determinable\n"
+            'Example: {"title": "The Fellowship of the Ring"}'
+        )
+
+        last_error = None
+        for attempt in range(1, self.MAX_LLM_RETRIES + 1):
+            try:
+                prompt = f"{system_prompt}\n\nText:\n{sample}\n\nJSON:"
+                output = self._call_llm(
+                    prompt,
+                    max_tokens=128,
+                    stops=["\n\nText:", "\n\nJSON:", "</s>", "<|eot_id|>"],
+                )
+                data = self._extract_json(output)
+                if not isinstance(data, dict):
+                    raise ValueError(f"non-dict response: {output!r}")
+                title = data.get("title")
+                if title is not None:
+                    title = str(title).strip()
+                    if title:
+                        return title
+                return None
+            except Exception as e:
+                last_error = e
+                logger.warning(
+                    f"detect_story_title attempt {attempt}/{self.MAX_LLM_RETRIES} failed: {e}"
+                )
+
+        logger.warning(
+            f"detect_story_title failed after {self.MAX_LLM_RETRIES} attempts: {last_error}"
+        )
+        return None
 
     def detect_language(self, text: str) -> str:
         """Ask the LLM which language `text` is written in.
@@ -932,19 +1128,76 @@ class LLMNormalizer:
         # input, so normalize + context-fill produce garbage at this scale.
         # We pass the original split text straight through to TTS.
         final = []
+        current_source = None
+        chapter_title_added = False
+        current_chapter_number = 1
+        current_chapter_title = "Chapter 1"
+        story_title = None
+        story_title_detected = False
+
         for i, seg in enumerate(rechunked):
             record = storage.load_segment_meta(i)
             if record is not None:
                 final.append(record)
+                current_source = seg.get("source_file", "default")
                 continue
+
+            text = seg["text"]
+            source_file = seg.get("source_file", "default")
+
+            # Detect story title once on the first segment
+            if not story_title_detected:
+                story_title = self.detect_story_title(seg["text"]) or "Audiobook"
+                story_title_detected = True
+                if story_title != "Audiobook":
+                    report(f"  detected story title: '{story_title}'")
+
+            # Detect chapter info when source file changes
+            if source_file != current_source:
+                chapter_info = self.detect_chapter_info(seg["text"])
+                detected_num = chapter_info.get("chapter_number")
+                detected_title = chapter_info.get("chapter_title")
+                if detected_num is not None:
+                    current_chapter_number = detected_num
+                    report(f"  detected chapter number: {current_chapter_number}")
+                if detected_title:
+                    current_chapter_title = detected_title
+                    report(f"  detected chapter title: '{current_chapter_title}'")
+                else:
+                    current_chapter_title = f"Chapter {current_chapter_number}"
+
+            # Add chapter title to the first segment of each new chapter if enabled
+            if config.VOCALIZE_CHAPTER_NAMES and source_file != current_source:
+                chapter_title = self.format_chapter_title(source_file)
+                text = f"{chapter_title}. {text}"
+                report(f"  added chapter title: '{chapter_title}' to segment {i + 1}")
+                chapter_title_added = True
+            else:
+                chapter_title_added = False
+
+            current_source = source_file
+
+            # Detect speaking speed for the segment
+            try:
+                speaking_speed = self.detect_speaking_speed(seg["text"])
+            except Exception as e:
+                logger.debug(f"Speaking speed detection failed for segment {i}: {e}")
+                speaking_speed = self.DEFAULT_SPEAKING_SPEED
+
             record = {
-                "normalized_text": seg["text"],
+                "normalized_text": text,
                 "emotion": seg["emotion"],
                 "detected_emotions": [seg["emotion"]],
                 "language": seg.get("language", self.DEFAULT_LANGUAGE),
+                "speaking_speed": speaking_speed,
                 "ends_paragraph": seg["ends_paragraph"],
                 "source_chunk": seg["source_chunk"],
-                "source_file": seg.get("source_file", "default"),
+                "source_file": source_file,
+                "chapter_title_added": chapter_title_added,
+                "chunk_number": i,
+                "chapter_number": current_chapter_number,
+                "chapter_title": current_chapter_title,
+                "story_title": story_title,
             }
             storage.save_segment_meta(i, record)
             final.append(record)

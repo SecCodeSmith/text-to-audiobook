@@ -505,6 +505,55 @@ class TTSEngine:
             raise
 
     # ------------------------------------------------------------------
+    # WAV metadata tagging
+    # ------------------------------------------------------------------
+
+    def _tag_wav(self, wav_path: Path, payload: dict) -> None:
+        """Add ID3 metadata tags to a WAV file.
+
+        Tags added:
+          - TIT2 (Title): "{chapter_title} - Part {chunk_number}"
+          - TALB (Album): story_title
+          - TRCK (Track): chapter_number
+          - TPE1 (Artist): "Narrator"
+          - TCON (Genre): "Audiobook"
+          - TDRC (Year): current year
+          - COMM (Comment): "Chunk {chunk_number}, Chapter {chapter_number}"
+        """
+        try:
+            from mutagen.id3 import ID3, COMM, TALB, TDRC, TCON, TIT2, TRCK, TPE1
+            from pathlib import Path
+            from datetime import datetime
+
+            chunk_number = payload.get("chunk_number", 0)
+            chapter_number = payload.get("chapter_number", 1)
+            chapter_title = payload.get("chapter_title", f"Chapter {chapter_number}")
+            story_title = payload.get("story_title", "Audiobook")
+
+            try:
+                tags = ID3(str(wav_path))
+            except Exception:
+                tags = ID3()
+
+            tags[TIT2.FrameID] = TIT2(text=[f"{chapter_title} - Part {chunk_number}"])
+            tags[TALB.FrameID] = TALB(text=[story_title])
+            tags[TRCK.FrameID] = TRCK(text=[str(chapter_number)])
+            tags[TPE1.FrameID] = TPE1(text=["Narrator"])
+            tags[TCON.FrameID] = TCON(text=["Audiobook"])
+            tags[TDRC.FrameID] = TDRC(text=[str(datetime.now().year)])
+            tags[COMM.FrameID] = COMM(
+                desc="",
+                lang="eng",
+                text=[f"Chunk {chunk_number}, Chapter {chapter_number}"]
+            )
+
+            tags.save(str(wav_path), v2_version=3)
+        except ImportError:
+            logger.warning("mutagen not available, skipping WAV metadata tagging")
+        except Exception as e:
+            logger.warning(f"Failed to tag WAV file {wav_path}: {e}")
+
+    # ------------------------------------------------------------------
     # Batch processing
     # ------------------------------------------------------------------
 
@@ -587,6 +636,9 @@ class TTSEngine:
                     f"Chunk {i} already exists ({len(existing_parts)} part(s)), skipping"
                 )
                 wav_paths.extend(existing_parts)
+                # Tag existing WAV files with metadata from payload
+                for wav_path in existing_parts:
+                    self._tag_wav(wav_path, payload)
                 if i == 0:
                     self.anchor_path = existing_parts[0]
                 if chunk_done_cb:
@@ -624,6 +676,11 @@ class TTSEngine:
                 raise
 
             wav_paths.extend(chunk_wav_paths)
+
+            # Tag WAV files with metadata from payload
+            for wav_path in chunk_wav_paths:
+                self._tag_wav(Path(wav_path), payload)
+
             if chunk_done_cb:
                 chunk_done_cb()
 

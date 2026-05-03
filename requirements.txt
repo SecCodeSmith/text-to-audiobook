@@ -13,5 +13,6 @@ customtkinter>=5.2.2
 natsort>=8.4.0
 regex>=2024.9.11
 huggingface_hub>=0.23.0
+mutagen>=1.46.0
 pytest>=8.3.0
 pytest-mock>=3.14.0

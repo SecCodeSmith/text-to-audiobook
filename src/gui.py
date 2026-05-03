@@ -231,6 +231,14 @@ class SettingsWindow(ctk.CTkToplevel):
             entry_type="choice",
             choices=["true", "false"],
         )
+        _row(
+            frame,
+            "VOCALIZE_CHAPTER_NAMES",
+            "Vocalize chapter names",
+            _cur("VOCALIZE_CHAPTER_NAMES"),
+            entry_type="choice",
+            choices=["true", "false"],
+        )
 
         _section("Logging")
         _row(
@@ -281,7 +289,7 @@ class SettingsWindow(ctk.CTkToplevel):
             "TTS_MAX_TOKENS",
             "TTS_MAX_WORDS_FALLBACK",
         }
-        bool_keys = {"CHAPTER_BY_CHAPTER"}
+        bool_keys = {"CHAPTER_BY_CHAPTER", "VOCALIZE_CHAPTER_NAMES"}
         settings = {}
         for key, var in self._fields.items():
             raw = var.get().strip()
@@ -315,7 +323,7 @@ class SettingsWindow(ctk.CTkToplevel):
         for key, var in self._fields.items():
             if key in defaults:
                 val = defaults[key]
-                if key == "CHAPTER_BY_CHAPTER":
+                if key in ("CHAPTER_BY_CHAPTER", "VOCALIZE_CHAPTER_NAMES"):
                     var.set(str(val).lower())
                 else:
                     var.set(str(val))
@@ -595,15 +603,6 @@ class TTSApp:
         control_frame = ctk.CTkFrame(frame)
         control_frame.grid(row=5, column=0, sticky="ew", **_PAD)
 
-        self._chapter_mode_var = tk.BooleanVar(value=config.CHAPTER_BY_CHAPTER)
-        self._chapter_mode_cb = ctk.CTkCheckBox(
-            control_frame,
-            text="Chapter-by-chapter",
-            variable=self._chapter_mode_var,
-            command=self._toggle_chapter_mode,
-        )
-        self._chapter_mode_cb.pack(side="left", padx=4, pady=4)
-
         self.stop_btn = ctk.CTkButton(
             control_frame,
             text="Stop",
@@ -827,13 +826,6 @@ class TTSApp:
                 logger.warning(f"Quick config: invalid value for {key}: {var.get()!r}")
         config.save_settings_to_file(settings)
         logger.info("Quick config applied.")
-
-    def _toggle_chapter_mode(self):
-        val = self._chapter_mode_var.get()
-        setattr(config, "CHAPTER_BY_CHAPTER", val)
-        config.save_settings_to_file({"CHAPTER_BY_CHAPTER": val})
-        mode = "chapter-by-chapter" if val else "single file"
-        logger.info(f"Output mode changed to: {mode}")
 
     # -----------------------------------------------------------------------
     # Close confirmation
