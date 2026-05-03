@@ -293,7 +293,7 @@ Dependencies & Models:
 - Qwen3-TTS: Apache 2.0
 - Llama-3.2: Meta Community License Agreement
 
-See [LICENSE](LICENSE) for full AGPL-3.0 text and [LICENSES.md](LICENSES.md) for comprehensive dependency and model license documentation.
+See [LICENSE](LICENSE) for full AGPL-3.0 text and [License notice](docs/LICENSES_NOTICES.md) for comprehensive dependency and model license documentation.
 
 ## Author
 
