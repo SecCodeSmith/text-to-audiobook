@@ -4,7 +4,7 @@ This project incorporates several open-source libraries. Below is a comprehensiv
 
 ## Project License
 
-AI_TTS_v7 is provided under the [MIT License](LICENSE).
+text to audiobook is provided under the [AGPL License](LICENSE).
 
 ---
 

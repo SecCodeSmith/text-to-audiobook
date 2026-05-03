@@ -71,7 +71,7 @@ brew install ffmpeg
 ### 2. Clone and setup
 
 ```bash
-cd AI_TTS_v7
+cd text-to-audiobook
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
