@@ -522,7 +522,6 @@ class TTSEngine:
         """
         try:
             from datetime import datetime
-            from pathlib import Path
 
             from mutagen.id3 import COMM, ID3, TALB, TCON, TDRC, TIT2, TPE1, TRCK
 
